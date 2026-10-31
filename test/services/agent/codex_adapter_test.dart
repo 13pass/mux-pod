@@ -11,6 +11,7 @@ void main() {
   AgentContext contextFor(FakeAgentTransport ssh, {String? workingDirectory}) {
     return AgentContext(
       ssh: ssh,
+      paneIO: ssh.paneIO,
       paneId: '%3',
       paneWorkingDirectory: workingDirectory,
     );
@@ -177,11 +178,12 @@ void main() {
           'model = "gpt-5.5"\n'
           'approval_policy = "on-request"\n');
       // Restart: double Ctrl+C, then relaunch in the pane's directory.
-      expect(ssh.sentKeyCommands, [
-        'tmux send-keys -t %3 C-c',
-        'tmux send-keys -t %3 C-c',
-        'tmux send-keys -t %3 -l -- "cd -- \\"/home/user/proj\\" && codex"',
-        'tmux send-keys -t %3 Enter',
+      expect(ssh.paneIO.calls, [
+        'interrupt %3',
+        'interrupt %3',
+        'currentCommand %3',
+        'typeLiteral %3 cd -- "/home/user/proj" && codex',
+        'enter %3',
       ]);
       expect(message, contains('gpt-5.5'));
       expect(message, contains('restarted'));
@@ -200,10 +202,10 @@ void main() {
         ssh.files[CodexAdapter.configPath],
         'model_reasoning_effort = "high"\n',
       );
-      expect(ssh.sentKeyCommands.last, 'tmux send-keys -t %3 Enter');
+      expect(ssh.paneIO.calls.last, 'enter %3');
       expect(
-        ssh.sentKeyCommands[ssh.sentKeyCommands.length - 2],
-        r'tmux send-keys -t %3 -l -- "cd -- \"\$HOME\" && codex"',
+        ssh.paneIO.calls[ssh.paneIO.calls.length - 2],
+        r'typeLiteral %3 cd -- "$HOME" && codex',
       );
     });
 
@@ -214,7 +216,7 @@ void main() {
         throwsArgumentError,
       );
       expect(ssh.files, isEmpty);
-      expect(ssh.sentKeyCommands, isEmpty);
+      expect(ssh.paneIO.calls, isEmpty);
     });
   });
 
@@ -260,7 +262,7 @@ void main() {
         UnifiedPermission.custom,
       );
       expect(ssh.files[CodexAdapter.configPath], '');
-      expect(ssh.sentKeyCommands, isEmpty);
+      expect(ssh.paneIO.calls, isEmpty);
       expect(message, contains('untouched'));
     });
   });
@@ -271,7 +273,7 @@ void main() {
       final message = await adapter.setPlanMode(contextFor(ssh), true);
       expect(message, contains('/plan'));
       expect(ssh.files, isEmpty);
-      expect(ssh.sentKeyCommands, isEmpty);
+      expect(ssh.paneIO.calls, isEmpty);
     });
   });
 

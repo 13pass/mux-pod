@@ -6,6 +6,9 @@ import '../services/agent/agent_adapter.dart';
 import '../services/agent/agent_registry.dart';
 import '../services/agent/agent_transport.dart';
 import '../services/agent/agent_types.dart';
+import '../services/agent/pane_io.dart';
+import '../services/backend/backend_type.dart';
+import '../services/backend/multiplexer_config.dart';
 import '../services/ssh/ssh_client.dart';
 import '../services/tmux/tmux_facade.dart';
 import 'connection_connect_options.dart';
@@ -102,6 +105,8 @@ class RemoteUiState {
 /// operations never block terminal input.
 class RemoteUiNotifier extends Notifier<RemoteUiState> {
   SshClient? _client;
+  PaneIO? _paneIO;
+  AgentTransport? _transport;
 
   @override
   RemoteUiState build() {
@@ -114,6 +119,9 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   /// The dedicated SSH connection used by the Remote UI tab, null until
   /// [selectServer] succeeds.
   SshClient? get client => _client;
+
+  /// Backend-aware pane access for the selected server (tmux or herdr).
+  PaneIO? get paneIO => _paneIO;
 
   /// Connects to the server [connectionId] and detects running agents.
   Future<void> selectServer(String connectionId) async {
@@ -129,14 +137,23 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
 
     final previous = _client;
     _client = null;
+    _paneIO = null;
+    _transport = null;
     if (previous != null) await previous.disconnect();
 
     final client = SshClient();
     try {
+      final isHerdr = connection.multiplexer.backend == BackendType.herdr;
       final options = await buildConnectionConnectOptions(
         connection,
         settingsKeepAliveTimeoutSeconds:
             ref.read(settingsProvider).keepAliveTimeoutSeconds,
+        // For herdr connections the multiplexer executablePath points at the
+        // herdr binary, not tmux; the Remote UI never runs tmux commands on a
+        // herdr server, so drop it to keep tmux auto-detection sane.
+        multiplexerOverride: isHerdr
+            ? const MultiplexerConfig(backend: BackendType.herdr)
+            : null,
       );
 
       await client.connect(
@@ -147,6 +164,13 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       );
 
       _client = client;
+      _transport = SshAgentTransport(client);
+      _paneIO = isHerdr
+          ? HerdrPaneIO(
+              _transport!,
+              herdrBin: connection.multiplexer.executablePath ?? 'herdr',
+            )
+          : TmuxPaneIO(client.tmuxExecutor);
       state = state.copyWith(
         connectionId: connectionId,
         isConnecting: false,
@@ -170,49 +194,51 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   Future<void> disconnect() async {
     final client = _client;
     _client = null;
+    _paneIO = null;
+    _transport = null;
     if (client != null) await client.disconnect();
     state = const RemoteUiState();
   }
 
-  /// Re-scans the server's tmux panes for a known agent and re-reads its
+  /// Re-scans the server's panes for a known agent and re-reads its
   /// configuration.
   ///
-  /// Detection runs `tmux list-panes -a` through the shared [tmuxFacade]
-  /// (works for plain tmux servers and herdr, which manages tmux panes
-  /// underneath) and matches each pane's `pane_current_command` against
-  /// the registered adapters.
+  /// Detection is backend-aware: on tmux servers it runs
+  /// `tmux list-panes -a` (via the shared [tmuxFacade]); on herdr servers
+  /// it uses `herdr api snapshot` + `herdr pane process-info`, because
+  /// herdr's panes are its own terminal emulators, invisible to tmux. Each
+  /// pane's foreground process is matched against the registered adapters.
   Future<void> refresh() async {
     final client = _client;
-    if (client == null || !client.isConnected) return;
+    final paneIO = _paneIO;
+    final transport = _transport;
+    if (client == null || paneIO == null || transport == null || !client.isConnected) {
+      return;
+    }
 
     state = state.copyWith(isBusy: true, error: null);
     try {
-      final sessions = await tmuxFacade.listAllPanes(client.tmuxExecutor);
+      final panes = await paneIO.listPanes();
 
       AgentAdapter? found;
       String? paneId;
       String? panePath;
-      for (final session in sessions) {
-        for (final window in session.windows) {
-          for (final pane in window.panes) {
-            final adapter = AgentRegistry.detect(pane.currentCommand);
-            if (adapter != null) {
-              found = adapter;
-              paneId = pane.id;
-              panePath = pane.currentPath;
-              break;
-            }
-          }
-          if (found != null) break;
+      for (final pane in panes) {
+        final adapter = AgentRegistry.detect(pane.command);
+        if (adapter != null) {
+          found = adapter;
+          paneId = pane.id;
+          panePath = pane.path;
+          break;
         }
-        if (found != null) break;
       }
 
       var config = const AgentConfig();
       if (found != null) {
         config = await found.readConfig(
           AgentContext(
-            ssh: SshAgentTransport(client),
+            ssh: transport,
+            paneIO: paneIO,
             paneId: paneId!,
             paneWorkingDirectory: panePath,
           ),
@@ -265,13 +291,17 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         action,
   ) async {
     final adapter = state.agent;
-    final client = _client;
+    final transport = _transport;
+    final paneIO = _paneIO;
     final paneId = state.agentPaneId;
-    if (adapter == null || client == null || paneId == null) return;
+    if (adapter == null || transport == null || paneIO == null || paneId == null) {
+      return;
+    }
 
     state = state.copyWith(isBusy: true, error: null, notice: null);
     final context = AgentContext(
-      ssh: SshAgentTransport(client),
+      ssh: transport,
+      paneIO: paneIO,
       paneId: paneId,
       paneWorkingDirectory: state.agentPanePath,
     );

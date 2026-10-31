@@ -239,7 +239,7 @@ void main() {
       expect(find.byKey(const Key('remote_ui.agent_picker')), findsNothing);
       expect(find.text('sonnet Medium'), findsOneWidget);
       expect(find.text('Default permissions'), findsOneWidget);
-      expect(find.text('Detected: Claude Code (pane %3)'), findsOneWidget);
+      expect(find.textContaining('Detected: Claude Code (pane %3)'), findsOneWidget);
       expect(remote.appliedModels, isEmpty);
     });
 

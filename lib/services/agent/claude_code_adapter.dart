@@ -1,4 +1,3 @@
-import '../tmux/commands/input_commands.dart';
 import 'agent_adapter.dart';
 import 'agent_config_service.dart';
 import 'agent_types.dart';
@@ -214,10 +213,8 @@ class ClaudeCodeAdapter extends AgentAdapter {
   /// [TmuxCommands.sendKeys], which shell-escapes it; Enter is sent
   /// separately so the TUI receives distinct keystrokes.
   Future<void> _sendSlashCommand(AgentContext context, String text) async {
-    await context.ssh.sendKeysCommand(
-      TmuxInputCommands.sendKeys(context.paneId, text, literal: true),
-    );
-    await context.ssh.sendKeysCommand(TmuxInputCommands.sendEnter(context.paneId));
+    await context.paneIO.typeLiteral(context.paneId, text);
+    await context.paneIO.pressEnter(context.paneId);
   }
 
   /// Sets a dotted key in `~/.claude/settings.json`, preserving all other

@@ -9,7 +9,7 @@ void main() {
   final adapter = FactoryDroidAdapter();
 
   AgentContext contextFor(FakeAgentTransport ssh) {
-    return AgentContext(ssh: ssh, paneId: '%9');
+    return AgentContext(ssh: ssh, paneIO: ssh.paneIO, paneId: '%9');
   }
 
   group('capabilities', () {
@@ -161,9 +161,9 @@ void main() {
         contextFor(ssh),
         'claude-opus-4-7',
       );
-      expect(ssh.sentKeyCommands, [
-        'tmux send-keys -t %9 -l -- "/model claude-opus-4-7"',
-        'tmux send-keys -t %9 Enter',
+      expect(ssh.paneIO.calls, [
+        'typeLiteral %9 /model claude-opus-4-7',
+        'enter %9',
       ]);
       expect(message, contains('/model claude-opus-4-7'));
     });

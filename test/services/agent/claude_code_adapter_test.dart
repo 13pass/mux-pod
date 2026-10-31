@@ -9,7 +9,7 @@ void main() {
   final adapter = ClaudeCodeAdapter();
 
   AgentContext contextFor(FakeAgentTransport ssh) {
-    return AgentContext(ssh: ssh, paneId: '%7');
+    return AgentContext(ssh: ssh, paneIO: ssh.paneIO, paneId: '%7');
   }
 
   group('capabilities', () {
@@ -125,9 +125,9 @@ void main() {
     test('types /model into the pane and submits it', () async {
       final ssh = FakeAgentTransport();
       final message = await adapter.applyModel(contextFor(ssh), 'opus');
-      expect(ssh.sentKeyCommands, [
-        'tmux send-keys -t %7 -l -- "/model opus"',
-        'tmux send-keys -t %7 Enter',
+      expect(ssh.paneIO.calls, [
+        'typeLiteral %7 /model opus',
+        'enter %7',
       ]);
       expect(message, contains('/model opus'));
     });
@@ -140,9 +140,9 @@ void main() {
         contextFor(ssh),
         UnifiedIntelligence.extraHigh,
       );
-      expect(ssh.sentKeyCommands, [
-        'tmux send-keys -t %7 -l -- "/effort xhigh"',
-        'tmux send-keys -t %7 Enter',
+      expect(ssh.paneIO.calls, [
+        'typeLiteral %7 /effort xhigh',
+        'enter %7',
       ]);
       expect(message, contains('xhigh'));
     });

@@ -1,12 +1,15 @@
-import '../tmux/commands/input_commands.dart';
 import 'agent_transport.dart';
 import 'agent_types.dart';
+import 'pane_io.dart';
 
 /// Everything an adapter needs to talk to a running agent: a live SSH
 /// transport plus the tmux pane the agent process runs in.
 class AgentContext {
   /// Live SSH transport to the host running the agent.
   final AgentTransport ssh;
+
+  /// Backend-aware pane access (tmux or herdr) for the agent's pane.
+  final PaneIO paneIO;
 
   /// tmux pane id (e.g. `%12`) where the agent process runs.
   final String paneId;
@@ -17,6 +20,7 @@ class AgentContext {
 
   const AgentContext({
     required this.ssh,
+    required this.paneIO,
     required this.paneId,
     this.paneWorkingDirectory,
   });
@@ -83,10 +87,8 @@ abstract class AgentAdapter {
   /// which is how every TUI agent (Claude Code, Codex, Droid, Vibe, ...)
   /// accepts chat input. Returns a short confirmation message for the UI.
   Future<String> sendMessage(AgentContext context, String message) async {
-    await context.ssh.sendKeysCommand(
-      TmuxInputCommands.sendKeys(context.paneId, message, literal: true),
-    );
-    await context.ssh.sendKeysCommand(TmuxInputCommands.sendEnter(context.paneId));
+    await context.paneIO.typeLiteral(context.paneId, message);
+    await context.paneIO.pressEnter(context.paneId);
     return 'Sent to $capabilitiesDisplayName: $message';
   }
 

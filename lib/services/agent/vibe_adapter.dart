@@ -1,4 +1,3 @@
-import '../tmux/commands/input_commands.dart';
 import 'agent_adapter.dart';
 import 'agent_config_service.dart';
 import 'agent_types.dart';
@@ -104,10 +103,8 @@ class VibeAdapter extends AgentAdapter {
           AgentConfigService.tomlSetString(content, 'active_model', model),
     );
     // Best-effort immediate effect on the running TUI session.
-    await context.ssh.sendKeysCommand(
-      TmuxInputCommands.sendKeys(context.paneId, '/model $model', literal: true),
-    );
-    await context.ssh.sendKeysCommand(TmuxInputCommands.sendEnter(context.paneId));
+    await context.paneIO.typeLiteral(context.paneId, '/model $model');
+    await context.paneIO.pressEnter(context.paneId);
     return 'Model "$model" saved to $configPath and /model sent to the pane';
   }
 

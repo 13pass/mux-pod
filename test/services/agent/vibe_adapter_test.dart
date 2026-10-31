@@ -66,6 +66,7 @@ void main() {
 
     AgentContext contextFor(FakeAgentTransport ssh) => AgentContext(
           ssh: ssh,
+          paneIO: ssh.paneIO,
           paneId: '%7',
           paneWorkingDirectory: '/home/vincent/agents/vibe',
         );
@@ -105,10 +106,10 @@ void main() {
         contains('default_agent = "ask"'),
       );
       expect(message, contains('mistral-small'));
-      expect(ssh.sentKeyCommands, hasLength(2));
-      expect(ssh.sentKeyCommands[0], contains('send-keys'));
-      expect(ssh.sentKeyCommands[0], contains('/model mistral-small'));
-      expect(ssh.sentKeyCommands[1], contains('Enter'));
+      expect(ssh.paneIO.calls, [
+        'typeLiteral %7 /model mistral-small',
+        'enter %7',
+      ]);
     });
 
     test('applyPermission writes default_agent', () async {
@@ -140,10 +141,10 @@ void main() {
       final ssh = transport();
       final message =
           await VibeAdapter().sendMessage(contextFor(ssh), 'hello harness');
-      expect(ssh.sentKeyCommands, hasLength(2));
-      expect(ssh.sentKeyCommands[0], contains('-l'));
-      expect(ssh.sentKeyCommands[0], contains('hello harness'));
-      expect(ssh.sentKeyCommands[1], contains('Enter'));
+      expect(ssh.paneIO.calls, [
+        'typeLiteral %7 hello harness',
+        'enter %7',
+      ]);
       expect(message, contains('Vibe'));
     });
   });

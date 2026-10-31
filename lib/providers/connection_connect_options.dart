@@ -1,5 +1,6 @@
 import '../l10n/app_localizations.dart';
 import '../l10n/l10n_lookup.dart';
+import '../services/backend/multiplexer_config.dart';
 import '../services/keychain/secure_storage.dart';
 import '../services/ssh/ssh_client.dart';
 import '../services/ssh/ssh_proxy_options_resolver.dart';
@@ -20,6 +21,7 @@ Future<SshConnectOptions> buildConnectionConnectOptions(
   int? settingsKeepAliveTimeoutSeconds,
   SecureStorageService? storage,
   AppLocalizations? l10n,
+  MultiplexerConfig? multiplexerOverride,
 }) async {
   final store = storage ?? SecureStorageService();
   final loc = l10n ?? lookupL10n();
@@ -38,7 +40,7 @@ Future<SshConnectOptions> buildConnectionConnectOptions(
     return SshConnectOptions(
       privateKey: privateKey,
       passphrase: passphrase,
-      multiplexer: connection.multiplexer,
+      multiplexer: multiplexerOverride ?? connection.multiplexer,
       proxy: proxyOptions,
       keepAliveTimeoutSeconds: keepAliveTimeoutSeconds,
     );
@@ -46,7 +48,7 @@ Future<SshConnectOptions> buildConnectionConnectOptions(
   final password = await store.getPassword(connection.id);
   return SshConnectOptions(
     password: password,
-    multiplexer: connection.multiplexer,
+    multiplexer: multiplexerOverride ?? connection.multiplexer,
     proxy: proxyOptions,
     keepAliveTimeoutSeconds: keepAliveTimeoutSeconds,
   );

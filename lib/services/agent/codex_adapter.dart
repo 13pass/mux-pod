@@ -1,5 +1,3 @@
-import '../tmux/commands/content_commands.dart';
-import '../tmux/commands/input_commands.dart';
 import 'agent_adapter.dart';
 import 'agent_config_service.dart';
 import 'agent_types.dart';
@@ -273,34 +271,25 @@ class CodexAdapter extends AgentAdapter {
   /// relaunch line would be typed into the still-running agent), so the
   /// pane's `pane_current_command` is polled until Codex actually exits.
   Future<void> _restartAgent(AgentContext context) async {
-    await context.ssh.sendKeysCommand(
-      TmuxInputCommands.sendInterrupt(context.paneId),
-    );
-    await context.ssh.sendKeysCommand(
-      TmuxInputCommands.sendInterrupt(context.paneId),
-    );
+    await context.paneIO.pressInterrupt(context.paneId);
+    await context.paneIO.pressInterrupt(context.paneId);
 
     final deadline = DateTime.now().add(const Duration(seconds: 5));
     while (DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 300));
       String? current;
       try {
-        current = await context.ssh.execPersistent(
-          TmuxContentCommands.paneCurrentCommand(context.paneId),
-        );
+        current = await context.paneIO.currentCommand(context.paneId);
       } on Object {
         break; // Cannot verify; proceed rather than strand the user.
       }
       if (!matchesCommand(current)) break;
     }
 
-    await context.ssh.sendKeysCommand(
-      TmuxInputCommands.sendKeys(
-        context.paneId,
-        buildRelaunchCommand(context.paneWorkingDirectory),
-        literal: true,
-      ),
+    await context.paneIO.typeLiteral(
+      context.paneId,
+      buildRelaunchCommand(context.paneWorkingDirectory),
     );
-    await context.ssh.sendKeysCommand(TmuxInputCommands.sendEnter(context.paneId));
+    await context.paneIO.pressEnter(context.paneId);
   }
 }

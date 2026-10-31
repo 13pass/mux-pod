@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_muxpod/services/agent/agent_transport.dart';
+import 'package:flutter_muxpod/services/agent/pane_io.dart';
 import 'package:flutter_muxpod/services/command/command_result.dart';
 import 'package:flutter_muxpod/services/agent/agent_config_service.dart';
 
@@ -28,13 +29,30 @@ class FakeAgentTransport implements AgentTransport {
   /// Optional factory for [execStream] output (headless session tests).
   Stream<String> Function(String command)? onExecStream;
 
+  /// Backend-agnostic pane fake shared with the adapter tests.
+  final FakePaneIO paneIO = FakePaneIO();
+
   FakeAgentTransport({Map<String, String>? files}) : files = files ?? {};
 
   @override
   bool get isConnected => true;
 
+  /// Optional hook to serve canned stdout for arbitrary commands
+  /// (herdr CLI fakes). Checked before the filesystem emulation.
+  String Function(String command)? onExec;
+
   CommandResult _emulate(String command) {
     execCommands.add(command);
+    final hook = onExec;
+    if (hook != null) {
+      return CommandResult(
+        stdout: hook(command),
+        stderr: '',
+        exitCode: 0,
+        outputSeparation: CommandOutputSeparation.separated,
+        actualTransport: CommandTransport.ephemeral,
+      );
+    }
     final catMatch = RegExp(r'^cat -- "([^"]+)"$').firstMatch(command);
     if (catMatch != null) {
       final path = catMatch.group(1)!;
@@ -117,5 +135,41 @@ class FakeAgentTransport implements AgentTransport {
       files[backup] = existing;
     }
     files[target] = content;
+  }
+}
+
+/// Records [PaneIO] calls as readable strings: `typeLiteral %7 text`,
+/// `enter %7`, `interrupt %7`, `currentCommand %7`.
+class FakePaneIO implements PaneIO {
+  final List<String> calls = [];
+
+  /// Value returned by [currentCommand].
+  String? currentCommandValue;
+
+  /// Panes returned by [listPanes].
+  List<AgentPaneInfo> panes = const [];
+
+  @override
+  Future<List<AgentPaneInfo>> listPanes() async => panes;
+
+  @override
+  Future<String?> currentCommand(String paneId) async {
+    calls.add('currentCommand $paneId');
+    return currentCommandValue;
+  }
+
+  @override
+  Future<void> typeLiteral(String paneId, String text) async {
+    calls.add('typeLiteral $paneId $text');
+  }
+
+  @override
+  Future<void> pressEnter(String paneId) async {
+    calls.add('enter $paneId');
+  }
+
+  @override
+  Future<void> pressInterrupt(String paneId) async {
+    calls.add('interrupt $paneId');
   }
 }

@@ -1,4 +1,3 @@
-import '../tmux/commands/input_commands.dart';
 import 'agent_adapter.dart';
 import 'agent_config_service.dart';
 import 'agent_types.dart';
@@ -156,10 +155,8 @@ class FactoryDroidAdapter extends AgentAdapter {
 
   @override
   Future<String> applyModel(AgentContext context, String model) async {
-    await context.ssh.sendKeysCommand(
-      TmuxInputCommands.sendKeys(context.paneId, '/model $model', literal: true),
-    );
-    await context.ssh.sendKeysCommand(TmuxInputCommands.sendEnter(context.paneId));
+    await context.paneIO.typeLiteral(context.paneId, '/model $model');
+    await context.paneIO.pressEnter(context.paneId);
     return 'Sent /model $model to the pane (applies between turns)';
   }
 
