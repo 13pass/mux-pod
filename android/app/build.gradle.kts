@@ -50,6 +50,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Debug builds install side-by-side with a release-signed MuxPod
+            // (different applicationId => no signature-conflict install error).
+            applicationIdSuffix = ".debug"
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
         }
