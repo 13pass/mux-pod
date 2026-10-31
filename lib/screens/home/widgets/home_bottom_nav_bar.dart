@@ -15,7 +15,7 @@ class HomeBottomNavBar extends StatelessWidget {
     required this.onSelectTab,
   });
 
-  /// 現在のタブインデックス（0=Servers, 1=Keys, 2=Dashboard, 3=Notify, 4=Settings）。
+  /// 現在のタブインデックス（0=Servers, 1=Keys, 2=Dashboard, 3=Notify, 4=Settings, 5=Agent）。
   final int currentTab;
 
   /// タブ選択時のコールバック（親がタブ状態へ反映する）。
@@ -64,6 +64,14 @@ class HomeBottomNavBar extends StatelessWidget {
                   ),
                   // 中央スペーサー（Dashboardボタンの場所）
                   const SizedBox(width: 64),
+                  // Agent / Remote UI（中央右）
+                  _buildNavItem(
+                    context,
+                    index: 5,
+                    icon: Icons.smart_toy_outlined,
+                    label: context.l10n.homeAgent,
+                    isSelected: currentTab == 5,
+                  ),
                   // Notify（右寄り）
                   _buildNavItem(
                     context,
@@ -165,11 +173,10 @@ class HomeBottomNavBar extends StatelessWidget {
     final inactiveColor = isDark
         ? DesignColors.textMuted
         : DesignColors.textMutedLight;
-    return GestureDetector(
-      onTap: () => onSelectTab(index),
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 56,
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onSelectTab(index),
+        behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Column(
@@ -209,6 +216,7 @@ class HomeBottomNavBar extends StatelessWidget {
                   letterSpacing: 0.3,
                   color: isSelected ? DesignColors.primary : inactiveColor,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

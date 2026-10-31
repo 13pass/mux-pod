@@ -51,6 +51,11 @@ class TmuxContentCommands {
     return 'tmux display-message -p -t ${ShellCommandComposer.quote(target)} "#{pane_mode}"';
   }
 
+  /// ペインで実行中のコマンド名を取得（エージェント検出・終了検出用）
+  static String paneCurrentCommand(String target) {
+    return 'tmux display-message -p -t ${ShellCommandComposer.quote(target)} "#{pane_current_command}"';
+  }
+
   // inventory: TMUX-CMD-040
   /// 指定セッションの履歴（スクロールバック）保持行数を設定する。
   /// グローバル(-g)ではなく対象セッションのみに適用し、ユーザーの

@@ -474,6 +474,11 @@ class SshClient implements BackendAdapter {
   Future<CommandResult> execute(CommandRequest request) =>
       _executor.execute(request);
 
+  /// 長時間コマンドの stdout を増分ストリーミングする（詳細は
+  /// [SshCommandExecutor.execStream]）。ヘッドレスAIエージェント等の
+  /// ストリーミング購読に使う。キャンセルでリモートプロセスを終了する。
+  Stream<String> execStream(String command) => _executor.execStream(command);
+
   // inventory: SSH-035
   // inventory: LEGACY-0160
   /// イベントハンドラを設定する

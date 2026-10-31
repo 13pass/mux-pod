@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// 現在のタブインデックス Notifier
-/// タブ順序: 0=Servers, 1=Keys, 2=Dashboard, 3=Notify, 4=Settings
+/// タブ順序: 0=Servers, 1=Keys, 2=Dashboard, 3=Notify, 4=Settings, 5=Agent(Remote UI)
 ///
 /// home シェル・各タブ画面のどちらにも属さない中立モジュール。
 /// screens 配下を一切 import しない（画面間の相互循環参照を防ぐ）。

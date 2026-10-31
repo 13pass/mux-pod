@@ -232,6 +232,116 @@ class SshCommandExecutor {
     }
   }
 
+  /// コマンドを実行し、stdoutを増分ストリーミングする。
+  ///
+  /// [execute] と異なり、長時間実行されるコマンド（ヘッドレスAIエージェント等）の
+  /// 出力をリアルタイムに購読できる。コマンドは `bash -s` に stdin 経由で渡す
+  /// （ログインシェルが fish 等でも bash 構文で解釈されるため・_executeEphemeral と同じ方針）。
+  /// バイト列は `utf8.decoder` でストリームデコードするため、チャンク境界で
+  /// マルチバイト文字が分割されても壊れない。
+  ///
+  /// execロックはストリームの生存期間中保持される（[execute] の ephemeral と同じ
+  /// 排他規律）。そのためストリームが開いている間、他の ephemeral 実行はブロックされる。
+  /// 長時間のストリーミングには専用のSSH接続を使うこと。
+  ///
+  /// stderrはストリームの行汚染を防ぐためストリームには混ぜずバッファし、
+  /// プロセスが非ゼロ終了した場合に限り [SshConnectionError] として通知する。
+  /// リスナーがキャンセルするとチャネルを閉じ、リモートプロセスを終了させる。
+  Stream<String> execStream(String command) {
+    if (!isConnected() || client() == null) {
+      throw SshConnectionError(l10n()?.sshNotConnected ?? 'Not connected');
+    }
+
+    SSHSession? session;
+    var cancelled = false;
+    final cancelCompleter = Completer<void>();
+
+    final controller = StreamController<String>();
+    controller.onCancel = () {
+      cancelled = true;
+      // チャネルを閉じてリモートプロセスを終了させる
+      session?.close();
+      // 待機中の stdout/stderr 完了待ちを解除し、execロックを解放させる。
+      // リモートがCLOSEを返さない（半開き/切断）場合にロックが永久に
+      // 保持されるのを防ぐ。
+      if (!cancelCompleter.isCompleted) cancelCompleter.complete();
+    };
+
+    // ロック取得を含めて非同期で開始し、ストリームは即座に返す。
+    unawaited(_withExecLock(() async {
+      if (cancelled) return;
+      try {
+        session = await client()!.execute('bash -s');
+        session!.write(utf8.encode('$command\n'));
+        unawaited(session!.stdin.close());
+        // execute() 完了までにキャンセルされた場合は、起動したばかりの
+        // リモートプロセスを放置せずチャネルを閉じて終了させる。
+        if (cancelled) {
+          session?.close();
+          return;
+        }
+        final activeSession = session!;
+
+        // stdoutは増分デコードしてそのまま流す
+        final stdoutDone = Completer<void>();
+        final stdoutSubscription =
+            activeSession.stdout.cast<List<int>>().transform(utf8.decoder).listen(
+          (text) {
+            if (!controller.isClosed) controller.add(text);
+          },
+          onDone: () => stdoutDone.complete(),
+          onError: (Object e) => stdoutDone.completeError(e),
+        );
+
+        // stderrはエラー報告用にバッファするだけ（ストリームには流さない）
+        final stderrBytes = <int>[];
+        final stderrDone = Completer<void>();
+        final stderrSubscription = activeSession.stderr.listen(
+          (data) => stderrBytes.addAll(data),
+          onDone: () => stderrDone.complete(),
+          onError: (Object e) => stderrDone.completeError(e),
+        );
+
+        try {
+          // キャンセルとのレース: キャンセル時はリモートのCLOSE待ちで
+          // 永久にブロックせず、ロック解放を優先する。
+          await Future.any([
+            Future.wait([stdoutDone.future, stderrDone.future]),
+            cancelCompleter.future,
+          ]);
+        } finally {
+          await stdoutSubscription.cancel();
+          await stderrSubscription.cancel();
+        }
+
+        final exitCode = activeSession.exitCode;
+        activeSession.close();
+
+        if (controller.isClosed) return;
+        if (exitCode != null && exitCode != 0) {
+          final stderrText =
+              utf8.decode(stderrBytes, allowMalformed: true).trim();
+          controller.addError(SshConnectionError(
+            'Command exited with code $exitCode'
+            '${stderrText.isEmpty ? '' : ': $stderrText'}',
+          ));
+        }
+        await controller.close();
+      } catch (e) {
+        session?.close();
+        if (controller.isClosed) return;
+        controller.addError(
+          e is SshConnectionError
+              ? e
+              : SshConnectionError('Failed to execute command: $e', e),
+        );
+        await controller.close();
+      }
+    }));
+
+    return controller.stream;
+  }
+
   /// execチャネルを排他的に使用する
   Future<T> _withExecLock<T>(Future<T> Function() fn) async {
     while (_execLock != null) {
