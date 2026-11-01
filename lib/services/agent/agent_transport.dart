@@ -71,6 +71,9 @@ class SshAgentTransport implements AgentTransport {
         command: command,
         transport: CommandTransportPreference.ephemeralOnly,
         output: CommandOutputRequirement.separatedOutput,
+        // No exec may hang forever: without a bound, a wedged channel
+        // produced an endless console spinner (detection step).
+        timeout: timeout ?? const Duration(seconds: 20),
       ),
     );
   }
