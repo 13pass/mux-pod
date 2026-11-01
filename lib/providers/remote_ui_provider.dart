@@ -39,6 +39,9 @@ class RemoteUiState {
   /// Working directory of the agent pane (`pane_current_path`).
   final String? agentPanePath;
 
+  /// Human label of the agent pane (workspace / tab / pane title).
+  final String? agentPaneLabel;
+
   /// Last known agent configuration.
   final AgentConfig config;
 
@@ -62,6 +65,7 @@ class RemoteUiState {
     this.agent,
     this.agentPaneId,
     this.agentPanePath,
+    this.agentPaneLabel,
     this.config = const AgentConfig(),
     this.isBusy = false,
     this.error,
@@ -78,6 +82,7 @@ class RemoteUiState {
     Object? agent = _unset,
     Object? agentPaneId = _unset,
     Object? agentPanePath = _unset,
+    Object? agentPaneLabel = _unset,
     AgentConfig? config,
     bool? isBusy,
     Object? error = _unset,
@@ -97,6 +102,9 @@ class RemoteUiState {
       agentPanePath: agentPanePath == _unset
           ? this.agentPanePath
           : agentPanePath as String?,
+      agentPaneLabel: agentPaneLabel == _unset
+          ? this.agentPaneLabel
+          : agentPaneLabel as String?,
       config: config ?? this.config,
       isBusy: isBusy ?? this.isBusy,
       error: error == _unset ? this.error : error as String?,
@@ -196,6 +204,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         agent: found,
         agentPaneId: pane?.id,
         agentPanePath: pane?.path,
+        agentPaneLabel: pane == null || pane.label.isEmpty ? null : pane.label,
         config: config,
         isBusy: false,
         error: found == null && paneId != null
@@ -450,12 +459,14 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       AgentAdapter? found;
       String? paneId;
       String? panePath;
+      String? paneLabel;
       for (final pane in panes) {
         final adapter = AgentRegistry.detect(pane.command);
         if (adapter != null) {
           found = adapter;
           paneId = pane.id;
           panePath = pane.path;
+          if (pane.label.isNotEmpty) paneLabel = pane.label;
           break;
         }
       }
@@ -476,6 +487,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         agent: found,
         agentPaneId: paneId,
         agentPanePath: panePath,
+        agentPaneLabel: paneLabel,
         config: config,
         isBusy: false,
       );

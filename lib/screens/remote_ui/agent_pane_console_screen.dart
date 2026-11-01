@@ -116,7 +116,9 @@ class _AgentPaneConsoleScreenState
 
     final title = agent?.kind.displayName ?? 'Agent chat';
     final paneLabel =
-        widget.paneTitle ?? remote.agentPaneId ?? widget.paneId ?? '';
+        (remote.agentPaneLabel != null && remote.agentPaneLabel!.isNotEmpty)
+        ? remote.agentPaneLabel!
+        : (widget.paneTitle ?? remote.agentPaneId ?? widget.paneId ?? '');
 
     return Scaffold(
       appBar: AppBar(

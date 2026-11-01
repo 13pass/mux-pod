@@ -19,7 +19,34 @@ class AgentPaneInfo {
   /// Working directory of the pane.
   final String? path;
 
-  const AgentPaneInfo({required this.id, this.command, this.path});
+  /// Workspace (tmux session / herdr workspace) display name.
+  final String? workspace;
+
+  /// Tab (tmux window / herdr tab) display name.
+  final String? tab;
+
+  /// Pane display title (tmux pane title / herdr terminal_title).
+  final String? title;
+
+  const AgentPaneInfo({
+    required this.id,
+    this.command,
+    this.path,
+    this.workspace,
+    this.tab,
+    this.title,
+  });
+
+  /// Human label: workspace, tab and pane title joined with dots, e.g.
+  /// `vibe · shell · Vibe`. Empty parts are skipped.
+  String get label {
+    final parts = <String>[
+      if (workspace != null && workspace!.isNotEmpty) workspace!,
+      if (tab != null && tab!.isNotEmpty) tab!,
+      if (title != null && title!.isNotEmpty) title!,
+    ];
+    return parts.join(' \u00b7 ');
+  }
 }
 
 /// Backend-aware pane access for agent control.
@@ -90,6 +117,9 @@ class TmuxPaneIO implements PaneIO {
               id: pane.id,
               command: pane.currentCommand,
               path: pane.currentPath,
+              workspace: session.name,
+              tab: window.name,
+              title: pane.title,
             ),
           );
         }
@@ -203,9 +233,9 @@ class HerdrPaneIO implements PaneIO {
   /// [_snapshotCacheTtl] so a burst of lookups (badges + one console open)
   /// costs ONE snapshot round trip instead of one per lookup.
   static const _snapshotCacheTtl = Duration(seconds: 5);
-  ({List<({String id, String? path})> panes, DateTime at})? _snapshotCache;
+  ({List<AgentPaneInfo> panes, DateTime at})? _snapshotCache;
 
-  Future<List<({String id, String? path})>> _snapshotPanes() async {
+  Future<List<AgentPaneInfo>> _snapshotPanes() async {
     final cached = _snapshotCache;
     if (cached != null &&
         DateTime.now().difference(cached.at) < _snapshotCacheTtl) {
@@ -232,21 +262,63 @@ class HerdrPaneIO implements PaneIO {
     final panesRaw = snapshotObj is Map<String, dynamic>
         ? snapshotObj['panes']
         : snapshotObj;
-    final panes = <({String id, String? path})>[];
+    // Workspace / tab display names for pane labels.
+    final workspaceNames = <String, String>{};
+    final tabNames = <String, String>{};
+    if (snapshotObj is Map<String, dynamic>) {
+      final workspaces = snapshotObj['workspaces'];
+      if (workspaces is List) {
+        for (final w in workspaces) {
+          if (w is! Map<String, dynamic>) continue;
+          final id = w['workspace_id'];
+          final label = w['label'];
+          if (id is String && label is String && label.isNotEmpty) {
+            workspaceNames[id] = label;
+          }
+        }
+      }
+      final tabs = snapshotObj['tabs'];
+      if (tabs is List) {
+        for (final t in tabs) {
+          if (t is! Map<String, dynamic>) continue;
+          final id = t['tab_id'];
+          final label = t['label'];
+          if (id is String && label is String && label.isNotEmpty) {
+            tabNames[id] = label;
+          }
+        }
+      }
+    }
+    final panes = <AgentPaneInfo>[];
     if (panesRaw is List) {
       for (final raw in panesRaw) {
         if (raw is! Map<String, dynamic>) continue;
         final paneId = raw['pane_id'];
         if (paneId is! String || paneId.isEmpty) continue;
         final cwd = raw['cwd'];
-        panes.add((id: paneId, path: cwd is String ? cwd : null));
+        final workspaceId = raw['workspace_id'];
+        final tabId = raw['tab_id'];
+        final terminalTitle = raw['terminal_title'];
+        panes.add(
+          AgentPaneInfo(
+            id: paneId,
+            path: cwd is String ? cwd : null,
+            workspace: workspaceId is String
+                ? workspaceNames[workspaceId]
+                : null,
+            tab: tabId is String ? tabNames[tabId] : null,
+            title: terminalTitle is String && terminalTitle.isNotEmpty
+                ? terminalTitle
+                : null,
+          ),
+        );
       }
     }
     _snapshotCache = (panes: panes, at: DateTime.now());
     return panes;
   }
 
-  Future<AgentPaneInfo> _withCommand(({String id, String? path}) pane) async {
+  Future<AgentPaneInfo> _withCommand(AgentPaneInfo pane) async {
     // The foreground process name needs one extra call per pane; a pane
     // that closed between snapshot and query just reports no command.
     String? command;
@@ -255,7 +327,14 @@ class HerdrPaneIO implements PaneIO {
     } on Object {
       command = null;
     }
-    return AgentPaneInfo(id: pane.id, command: command, path: pane.path);
+    return AgentPaneInfo(
+      id: pane.id,
+      command: command,
+      path: pane.path,
+      workspace: pane.workspace,
+      tab: pane.tab,
+      title: pane.title,
+    );
   }
 
   @override
