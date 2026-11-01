@@ -227,6 +227,44 @@ void main() {
     expect(status.data, 'Command execution timed out');
   });
 
+  testWidgets('shows the pane recent output as the last messages', (
+    tester,
+  ) async {
+    final remote = _FixedRemoteUiNotifier(
+      RemoteUiState(
+        connectionId: 'c1',
+        isConnected: true,
+        agent: VibeAdapter(),
+        agentPaneId: 'w5:p3',
+        agentPaneLabel: 'vibe · muxpod',
+        paneContent: 'user: hello\nagent: hi there',
+      ),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+
+    final preview = tester.widget<SelectableText>(
+      find.byKey(const Key('agent_console.pane_content')),
+    );
+    expect(preview.data, contains('agent: hi there'));
+  });
+
+  testWidgets('offers a refresh hint when no output was read', (tester) async {
+    final remote = _FixedRemoteUiNotifier(
+      RemoteUiState(
+        connectionId: 'c1',
+        isConnected: true,
+        agent: VibeAdapter(),
+        agentPaneId: 'w5:p3',
+      ),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('No recent output available'), findsOneWidget);
+    expect(find.byKey(const Key('agent_console.pane_content')), findsNothing);
+  });
+
   testWidgets('never calls openPane while the frame is building', (
     tester,
   ) async {

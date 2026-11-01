@@ -189,6 +189,34 @@ void main() {
       expect(panes[1].command, 'vibe');
     });
 
+    test('readRecentContent reads unwrapped text and strips padding', () async {
+      final t = FakeAgentTransport();
+      final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+      t.onExec = (command) {
+        if (command.startsWith('test -x -- ')) return '';
+        if (command.contains('pane read w5:p3')) {
+          return 'user: do the thing   \nagent: done             \n';
+        }
+        throw StateError('unexpected: $command');
+      };
+      final content = await io.readRecentContent('w5:p3', lines: 12);
+      expect(content, 'user: do the thing\nagent: done');
+      final read = t.execCommands.where((c) => c.contains('pane read')).single;
+      expect(read, contains('--source recent-unwrapped'));
+      expect(read, contains('--lines 12'));
+      expect(read, contains('--format text'));
+    });
+
+    test('readRecentContent is empty on failure', () async {
+      final t = FakeAgentTransport();
+      final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+      t.onExec = (command) {
+        if (command.startsWith('test -x -- ')) return '';
+        throw StateError('channel error');
+      };
+      expect(await io.readRecentContent('w5:p3'), isEmpty);
+    });
+
     test(
       'currentCommand returns the lowercased first word of the process name',
       () async {

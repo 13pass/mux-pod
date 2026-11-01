@@ -53,6 +53,7 @@ class _AgentPaneConsoleScreenState
   static const _modelChipKey = Key('agent_console.model_chip');
 
   final _composerController = TextEditingController();
+  final _contentScrollController = ScrollController();
   bool _opening = true;
 
   @override
@@ -99,6 +100,7 @@ class _AgentPaneConsoleScreenState
   @override
   void dispose() {
     _composerController.dispose();
+    _contentScrollController.dispose();
     super.dispose();
   }
 
@@ -120,6 +122,17 @@ class _AgentPaneConsoleScreenState
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(error)));
+      }
+      // Keep the newest output in view whenever the preview updates.
+      if (next.paneContent != prev?.paneContent) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_contentScrollController.hasClients) return;
+          _contentScrollController.animateTo(
+            _contentScrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        });
       }
     });
 
@@ -342,12 +355,12 @@ class _AgentPaneConsoleScreenState
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
+          child: Row(
             children: [
               const Icon(Icons.terminal, size: 16),
               const SizedBox(width: 6),
@@ -362,18 +375,52 @@ class _AgentPaneConsoleScreenState
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 4),
+              IconButton(
+                key: const Key('agent_console.content_refresh'),
+                icon: const Icon(Icons.refresh, size: 18),
+                color: textMuted,
+                tooltip: 'Refresh recent output',
+                onPressed: () => unawaited(
+                  ref.read(remoteUiProvider.notifier).readPaneContent(),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'The composer below types into this pane. '
-            'Watch the reply in the terminal.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: textMuted),
-          ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: (remote.paneContent == null || remote.paneContent!.isEmpty)
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'No recent output available for this pane yet.\n'
+                      'Tap the refresh icon to retry.',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: textMuted),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : Scrollbar(
+                  controller: _contentScrollController,
+                  child: SingleChildScrollView(
+                    controller: _contentScrollController,
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                    child: SelectableText(
+                      key: const Key('agent_console.pane_content'),
+                      remote.paneContent!,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        height: 1.25,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ],
     );
   }
 

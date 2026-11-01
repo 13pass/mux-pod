@@ -46,6 +46,10 @@ class RemoteUiState {
   /// the console when no agent is found so a screenshot explains itself.
   final String? detectDetail;
 
+  /// Recent terminal output of the agent pane (the last messages
+  /// preview in the console), null when none was read yet.
+  final String? paneContent;
+
   /// Every agent detected on the server (one entry per pane running a
   /// known agent), powering the console's agent switcher.
   final List<DetectedAgent> detectedAgents;
@@ -75,6 +79,7 @@ class RemoteUiState {
     this.agentPanePath,
     this.agentPaneLabel,
     this.detectDetail,
+    this.paneContent,
     this.detectedAgents = const [],
     this.config = const AgentConfig(),
     this.isBusy = false,
@@ -94,6 +99,7 @@ class RemoteUiState {
     Object? agentPanePath = _unset,
     Object? agentPaneLabel = _unset,
     Object? detectDetail = _unset,
+    Object? paneContent = _unset,
     List<DetectedAgent>? detectedAgents,
     AgentConfig? config,
     bool? isBusy,
@@ -120,6 +126,9 @@ class RemoteUiState {
       detectDetail: detectDetail == _unset
           ? this.detectDetail
           : detectDetail as String?,
+      paneContent: paneContent == _unset
+          ? this.paneContent
+          : paneContent as String?,
       detectedAgents: detectedAgents ?? this.detectedAgents,
       config: config ?? this.config,
       isBusy: isBusy ?? this.isBusy,
@@ -211,12 +220,19 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
             : target.pane.label,
         detectedAgents: scan.agents,
         detectDetail: scan.detail,
+        // Cleared per open: the next read fills it with THIS pane's
+        // recent output (the previous agent's preview must not leak).
+        paneContent: null,
         config: config,
         isBusy: false,
         error: target == null && paneId != null
             ? 'No AI agent detected in pane $paneId'
             : null,
       );
+      if (target != null) {
+        // Best effort; never blocks the console open.
+        unawaited(readPaneContent());
+      }
     } on Object catch (e) {
       // Keep the failure visible in the status area (screenshots must
       // explain themselves), not only as a transient snackbar.
@@ -509,6 +525,24 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     await openPane(connectionId, state.agentPaneId);
   }
 
+  /// Re-reads the recent terminal output of the selected agent pane
+  /// (the last-messages preview in the console). Best effort: failures
+  /// keep the previous preview.
+  Future<void> readPaneContent({int lines = 40}) async {
+    final paneIO = _paneIO;
+    final paneId = state.agentPaneId;
+    if (paneIO == null || paneId == null) return;
+    try {
+      final content = await paneIO.readRecentContent(paneId, lines: lines);
+      // The selection may have changed while reading; only update the
+      // preview when the read still belongs to the selected pane.
+      if (!ref.mounted || state.agentPaneId != paneId) return;
+      state = state.copyWith(paneContent: content.isEmpty ? null : content);
+    } on Object {
+      // Keep the previous preview.
+    }
+  }
+
   /// Applies a model switch to the detected live-pane agent.
   Future<void> applyModel(String model) =>
       _apply((adapter, context) => adapter.applyModel(context, model));
@@ -530,8 +564,13 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   /// "connect to the harness chat agent" path: text is typed into the
   /// agent's pane from the mobile composer instead of the terminal
   /// keyboard).
-  Future<void> sendMessage(String message) =>
-      _apply((adapter, context) => adapter.sendMessage(context, message));
+  Future<void> sendMessage(String message) async {
+    await _apply((adapter, context) => adapter.sendMessage(context, message));
+    // The typed message (and the first lines of the reply) land in the
+    // pane a beat after send-keys: re-read the preview shortly.
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (ref.mounted) await readPaneContent();
+  }
 
   /// Clears the current notice/error after the UI has shown it.
   void clearMessages() {

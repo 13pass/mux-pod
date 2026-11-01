@@ -150,6 +150,9 @@ class FakePaneIO implements PaneIO {
   /// Value returned by [currentCommand].
   String? currentCommandValue;
 
+  /// Value returned by [readRecentContent].
+  String recentContent = '';
+
   /// Panes returned by [listPanes].
   List<AgentPaneInfo> panes = const [];
 
@@ -168,6 +171,12 @@ class FakePaneIO implements PaneIO {
   Future<String?> currentCommand(String paneId) async {
     calls.add('currentCommand $paneId');
     return currentCommandValue;
+  }
+
+  @override
+  Future<String> readRecentContent(String paneId, {int lines = 40}) async {
+    calls.add('readRecentContent $paneId');
+    return recentContent;
   }
 
   @override

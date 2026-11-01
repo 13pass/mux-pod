@@ -61,6 +61,11 @@ class DetectedAgent {
   final AgentAdapter adapter;
 }
 
+/// Strips the huge right padding TUI output carries (full-width status
+/// bars etc.) so preview lines don't wrap on a phone.
+String trimTrailingPadding(String raw) =>
+    [for (final line in raw.split('\n')) line.trimRight()].join('\n').trim();
+
 /// Backend-aware pane access for agent control.
 ///
 /// The Remote UI must work on both multiplexer backends mux-pod supports:
@@ -81,6 +86,12 @@ abstract class PaneIO {
 
   /// Current foreground process name of [paneId], null when unknown.
   Future<String?> currentCommand(String paneId);
+
+  /// Reads the last [lines] of the pane's terminal output as plain
+  /// text (long lines unwrapped when the backend supports it), with
+  /// trailing padding stripped per line. Best effort: empty string when
+  /// the content cannot be read.
+  Future<String> readRecentContent(String paneId, {int lines = 40});
 
   /// Types [text] literally into [paneId] (no key interpretation).
   Future<void> typeLiteral(String paneId, String text);
@@ -153,6 +164,22 @@ class TmuxPaneIO implements PaneIO {
     final out = await _run(TmuxContentCommands.paneCurrentCommand(paneId));
     final trimmed = out.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  @override
+  Future<String> readRecentContent(String paneId, {int lines = 40}) async {
+    try {
+      final out = await _run(
+        TmuxContentCommands.capture(
+          paneId,
+          startLine: -lines,
+          escapeSequences: false,
+        ),
+      );
+      return trimTrailingPadding(out);
+    } on Object {
+      return '';
+    }
   }
 
   @override
@@ -549,6 +576,24 @@ class HerdrPaneIO implements PaneIO {
     return name.split(' ').first.toLowerCase();
   }
 
+  @override
+  Future<String> readRecentContent(String paneId, {int lines = 40}) async {
+    final bin = await _bin();
+    try {
+      final out = await _transport.execWithExitCode(
+        '$bin pane read $paneId '
+        '--source recent-unwrapped --lines $lines --format text',
+        timeout: _execTimeout,
+      );
+      if (out.exitCode != 0) return '';
+      return trimTrailingPadding(out.stdout);
+    } on Object {
+      return '';
+    }
+  }
+
+  /// Strips the huge right padding TUI output carries (full-width
+  /// status bars etc.) so preview lines don't wrap on a phone.
   @override
   Future<void> typeLiteral(String paneId, String text) async {
     final bin = await _bin();
