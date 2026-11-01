@@ -32,11 +32,11 @@ void main() {
 
     test('streams parsed events and captures the session id', () async {
       ssh.onExecStream = (_) => Stream.fromIterable([
-        '{"type":"system","subtype":"init","session_id":"sess-1"}\n',
-        '{"type":"assistant","message":{"content":[{"type":"text","text":"Hi"}]}}\n',
-        '{"type":"result","subtype":"success","is_error":false,'
-            '"usage":{"input_tokens":10,"output_tokens":5}}\n',
-      ]);
+            '{"type":"system","subtype":"init","session_id":"sess-1"}\n',
+            '{"type":"assistant","message":{"content":[{"type":"text","text":"Hi"}]}}\n',
+            '{"type":"result","subtype":"success","is_error":false,'
+                '"usage":{"input_tokens":10,"output_tokens":5}}\n',
+          ]);
 
       final events = <ChatEvent>[];
       final sub = session.events.listen(events.add);
@@ -52,10 +52,7 @@ void main() {
       expect(session.isRunning, isFalse);
 
       expect(ssh.execCommands, hasLength(1));
-      expect(
-        ssh.execCommands[0],
-        startsWith("cd '/repo' && claude -p 'hello'"),
-      );
+      expect(ssh.execCommands[0], startsWith("cd '/repo' && claude -p 'hello'"));
       expect(ssh.execCommands[0], isNot(contains('--resume')));
     });
 
@@ -73,8 +70,8 @@ void main() {
     });
 
     test('emits RunFailed when the stream errors (SSH disconnect)', () async {
-      ssh.onExecStream = (_) =>
-          Stream.error(SshConnectionError('Connection lost'));
+      ssh.onExecStream =
+          (_) => Stream.error(SshConnectionError('Connection lost'));
 
       final events = <ChatEvent>[];
       final sub = session.events.listen(events.add);
@@ -90,9 +87,9 @@ void main() {
 
     test('send() resumes with the stored session id', () async {
       ssh.onExecStream = (_) => Stream.fromIterable([
-        '{"type":"system","subtype":"init","session_id":"sess-1"}\n',
-        '{"type":"result","subtype":"success","is_error":false}\n',
-      ]);
+            '{"type":"system","subtype":"init","session_id":"sess-1"}\n',
+            '{"type":"result","subtype":"success","is_error":false}\n',
+          ]);
 
       final sub = session.events.listen((_) {});
       await session.start('first');
@@ -105,7 +102,10 @@ void main() {
     });
 
     test('send() throws when no session id was captured', () {
-      expect(() => session.send('follow-up'), throwsA(isA<StateError>()));
+      expect(
+        () => session.send('follow-up'),
+        throwsA(isA<StateError>()),
+      );
     });
 
     test('start() throws while a run is active', () async {

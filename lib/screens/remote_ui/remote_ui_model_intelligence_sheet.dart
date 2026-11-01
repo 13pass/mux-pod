@@ -100,9 +100,8 @@ class _RemoteUiModelIntelligenceSheetContentState
             for (final level in levels)
               ListTile(
                 title: Text(level.label),
-                trailing: level == _intelligence
-                    ? const Icon(Icons.check)
-                    : null,
+                trailing:
+                    level == _intelligence ? const Icon(Icons.check) : null,
                 onTap: () => Navigator.pop(
                   context,
                   RemoteUiModelIntelligenceSelection(

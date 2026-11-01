@@ -72,7 +72,10 @@ abstract class AgentAdapter {
   /// Switches the autonomy/permission level. Returns a confirmation
   /// message. When [AgentCapabilities.requiresRestartToApply] is true the
   /// adapter restarts the agent process in its pane.
-  Future<String> applyPermission(AgentContext context, UnifiedPermission level);
+  Future<String> applyPermission(
+    AgentContext context,
+    UnifiedPermission level,
+  );
 
   /// Enables or disables plan/spec mode. Returns a confirmation message.
   Future<String> setPlanMode(AgentContext context, bool enabled);

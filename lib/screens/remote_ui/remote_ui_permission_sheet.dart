@@ -33,9 +33,8 @@ class RemoteUiPermissionSheet {
               ListTile(
                 title: Text(permission.label),
                 subtitle: Text(permission.description),
-                trailing: permission == selected
-                    ? const Icon(Icons.check)
-                    : null,
+                trailing:
+                    permission == selected ? const Icon(Icons.check) : null,
                 onTap: () => Navigator.pop(context, permission),
               ),
           ],

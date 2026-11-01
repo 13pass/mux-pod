@@ -34,18 +34,21 @@ void _mockSecureStorage() {
   // serve the real fingerprint for the host-key lookup.
   ft.TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
-  ft.TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+  ft
+      .TestWidgetsFlutterBinding
+      .instance
+      .defaultBinaryMessenger
       .setMockMethodCallHandler(channel, (call) async {
-        if (call.method == 'read') {
-          final key = call.arguments['key'] as String?;
-          if (key != null && key.startsWith('host_key_')) {
-            return _hostKeyFingerprint;
-          }
-          return null;
-        }
-        if (call.method == 'containsKey') return false;
-        return null;
-      });
+    if (call.method == 'read') {
+      final key = call.arguments['key'] as String?;
+      if (key != null && key.startsWith('host_key_')) {
+        return _hostKeyFingerprint;
+      }
+      return null;
+    }
+    if (call.method == 'containsKey') return false;
+    return null;
+  });
 }
 
 void main() {
@@ -55,75 +58,64 @@ void main() {
   final keyPath =
       Platform.environment['CONSOLE_SSH_KEY'] ?? '/tmp/muxpod_probe_key';
 
-  test(
-    'console connect path against the real sshd',
-    tags: 'live-sshd',
-    () async {
-      final privateKey = File(keyPath).readAsStringSync();
+  test('console connect path against the real sshd', tags: 'live-sshd',
+      () async {
+    final privateKey = File(keyPath).readAsStringSync();
 
-      Future<void> tryConnect({required bool lightweight}) async {
-        final client = SshClient();
-        final sw = Stopwatch()..start();
-        print('--- connect (lightweight=$lightweight) to $host:$port ...');
-        await client
-            .connect(
-              host: host,
-              port: port,
-              username: 'vincent',
-              options: SshConnectOptions(
-                privateKey: privateKey,
-                acceptNewHostKeys: true,
-              ),
-              lightweight: lightweight,
-              l10n: null,
-            )
-            .timeout(const Duration(seconds: 30));
-        print(
-          '    connected in ${sw.elapsedMilliseconds}ms '
-          '(isConnected=${client.isConnected})',
-        );
+    Future<void> tryConnect({required bool lightweight}) async {
+      final client = SshClient();
+      final sw = Stopwatch()..start();
+      print('--- connect (lightweight=$lightweight) to $host:$port ...');
+      await client
+          .connect(
+            host: host,
+            port: port,
+            username: 'vincent',
+            options: SshConnectOptions(
+              privateKey: privateKey,
+              acceptNewHostKeys: true,
+            ),
+            lightweight: lightweight,
+            l10n: null,
+          )
+          .timeout(const Duration(seconds: 30));
+      print('    connected in ${sw.elapsedMilliseconds}ms '
+          '(isConnected=${client.isConnected})');
 
-        final transport = SshAgentTransport(client);
-        final paneIO = HerdrPaneIO(transport, herdrBin: 'herdr');
-        sw
-          ..reset()
-          ..start();
-        final panes = await paneIO.listPanes();
-        print(
-          '    listPanes: ${panes.length} panes in '
+      final transport = SshAgentTransport(client);
+      final paneIO = HerdrPaneIO(transport, herdrBin: 'herdr');
+      sw
+        ..reset()
+        ..start();
+      final panes = await paneIO.listPanes();
+      print('    listPanes: ${panes.length} panes in '
           '${sw.elapsedMilliseconds}ms; agent panes: '
-          '${panes.where((p) => p.command != null && p.command!.isNotEmpty).map((p) => '${p.id}=${p.command}').take(6).join(', ')}',
-        );
-        final detected = [
-          for (final p in panes)
-            if (AgentRegistry.detect(p.command) != null)
-              '${p.id}=${p.command} (${p.label.isEmpty ? 'no label' : p.label})',
-        ];
-        print(
-          '    detected agents (${detected.length}): ${detected.join(', ')}',
-        );
-        sw
-          ..reset()
-          ..start();
-        final vibePane = panes.firstWhere(
-          (p) => p.command == 'vibe',
-          orElse: () => panes.first,
-        );
-        final info = await paneIO.paneInfoById(vibePane.id);
-        print(
-          '    paneInfoById(${vibePane.id}) in ${sw.elapsedMilliseconds}ms: '
-          'command=${info?.command} path=${info?.path}',
-        );
+          '${panes.where((p) => p.command != null && p.command!.isNotEmpty).map((p) => '${p.id}=${p.command}').take(6).join(', ')}');
+      final detected = [
+        for (final p in panes)
+          if (AgentRegistry.detect(p.command) != null)
+            '${p.id}=${p.command} (${p.label.isEmpty ? 'no label' : p.label})',
+      ];
+      print('    detected agents (${detected.length}): '
+          '${detected.join(', ')}');
+      sw
+        ..reset()
+        ..start();
+      final vibePane = panes.firstWhere(
+        (p) => p.command == 'vibe',
+        orElse: () => panes.first,
+      );
+      final info = await paneIO.paneInfoById(vibePane.id);
+      print('    paneInfoById(${vibePane.id}) in ${sw.elapsedMilliseconds}ms: '
+          'command=${info?.command} path=${info?.path}');
 
-        // Live-pane send path (to a THROWAWAY pane id so we touch nothing):
-        final out = await transport.exec('echo probe-ok');
-        print('    exec probe: ${out.trim()}');
-        await client.disconnect();
-      }
+      // Live-pane send path (to a THROWAWAY pane id so we touch nothing):
+      final out = await transport.exec('echo probe-ok');
+      print('    exec probe: ${out.trim()}');
+      await client.disconnect();
+    }
 
-      await tryConnect(lightweight: false);
-      await tryConnect(lightweight: true);
-    },
-    timeout: const Timeout(Duration(minutes: 2)),
-  );
+    await tryConnect(lightweight: false);
+    await tryConnect(lightweight: true);
+  }, timeout: const Timeout(Duration(minutes: 2)));
 }

@@ -55,7 +55,8 @@ class _ModelListPicker extends StatelessWidget {
           for (final model in availableModels)
             ListTile(
               title: Text(model),
-              trailing: model == selectedModel ? const Icon(Icons.check) : null,
+              trailing:
+                  model == selectedModel ? const Icon(Icons.check) : null,
               onTap: () => Navigator.pop(context, model),
             ),
         ],

@@ -192,23 +192,21 @@ void main() {
     });
 
     group('droid', () {
-      test(
-        'parses documented result shape into SessionStarted + RunCompleted',
-        () {
-          final events = parseAgentOutputLine(
-            AgentKind.droid,
-            '{"type":"result","subtype":"success","is_error":false,'
-            '"duration_ms":5657,"num_turns":1,"result":"summary text",'
-            '"session_id":"8af22e0a-d222-42c6-8c7e-7a059e391b0b"}',
-          );
-          expect(events, hasLength(2));
-          expect(
-            (events[0] as SessionStarted).sessionId,
-            '8af22e0a-d222-42c6-8c7e-7a059e391b0b',
-          );
-          expect(events[1], isA<RunCompleted>());
-        },
-      );
+      test('parses documented result shape into SessionStarted + RunCompleted',
+          () {
+        final events = parseAgentOutputLine(
+          AgentKind.droid,
+          '{"type":"result","subtype":"success","is_error":false,'
+          '"duration_ms":5657,"num_turns":1,"result":"summary text",'
+          '"session_id":"8af22e0a-d222-42c6-8c7e-7a059e391b0b"}',
+        );
+        expect(events, hasLength(2));
+        expect(
+          (events[0] as SessionStarted).sessionId,
+          '8af22e0a-d222-42c6-8c7e-7a059e391b0b',
+        );
+        expect(events[1], isA<RunCompleted>());
+      });
 
       test('parses error result into RunFailed', () {
         final events = parseAgentOutputLine(
@@ -281,23 +279,18 @@ void main() {
       expect((events[2] as TextDelta).text, 'b');
     });
 
-    test(
-      'flushes a trailing unterminated line when the stream closes',
-      () async {
-        final events = await parseAgentEventStream(
-          AgentKind.codex,
-          Stream.value(
-            '{"type":"turn.started"}\n{"type":"error","message":"x"}',
-          ),
-        ).toList();
-        expect(events, hasLength(1));
-        expect(events[0], isA<RunFailed>());
-      },
-    );
+    test('flushes a trailing unterminated line when the stream closes',
+        () async {
+      final events = await parseAgentEventStream(
+        AgentKind.codex,
+        Stream.value('{"type":"turn.started"}\n{"type":"error","message":"x"}'),
+      ).toList();
+      expect(events, hasLength(1));
+      expect(events[0], isA<RunFailed>());
+    });
 
     test('skips noise lines interleaved with JSON', () async {
-      const chunk =
-          'Compiling...\n'
+      const chunk = 'Compiling...\n'
           '{"type":"thread.started","thread_id":"t-1"}\n'
           'some warning\n';
       final events = await parseAgentEventStream(
@@ -321,7 +314,7 @@ void main() {
         final events = parseAgentOutputLine(
           AgentKind.vibe,
           '{"type":"message","role":"assistant","sessionId":"sess-9",'
-          '"content":[{"type":"text","text":"OK"}]}',
+              '"content":[{"type":"text","text":"OK"}]}',
         );
         expect(events, hasLength(2));
         expect(events[0], isA<SessionStarted>());
@@ -334,7 +327,7 @@ void main() {
         final events = parseAgentOutputLine(
           AgentKind.vibe,
           '{"type":"message","role":"user","sessionId":"s",'
-          '"content":[{"type":"text","text":"hi"}]}',
+              '"content":[{"type":"text","text":"hi"}]}',
         );
         expect(events.whereType<TextDelta>(), isEmpty);
       });
@@ -351,7 +344,7 @@ void main() {
         final events = parseAgentOutputLine(
           AgentKind.vibe,
           '{"type":"effect","sessionId":"s","title":"file_system.bash",'
-          '"detail":{"display":{"summary":"bash: pwd"}}}',
+              '"detail":{"display":{"summary":"bash: pwd"}}}',
         );
         final tools = events.whereType<ToolCallStarted>();
         expect(tools, hasLength(1));
