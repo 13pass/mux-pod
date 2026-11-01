@@ -223,11 +223,17 @@ class ConnectionAuthSection extends StatelessWidget {
     final inputColor = isDark
         ? DesignColors.inputDark
         : DesignColors.inputLight;
+    // The connection may reference a key that no longer exists (deleted,
+    // or the secure storage is unreadable). A value that matches no item
+    // crashes DropdownButtonFormField with an assertion - show a
+    // '(missing key)' placeholder item instead.
+    final keyExists = keysState.keys.any((key) => key.id == selectedKeyId);
+    final effectiveSelectedKeyId = keyExists ? selectedKeyId : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<String>(
-          initialValue: selectedKeyId,
+          initialValue: effectiveSelectedKeyId,
           decoration: ConnectionInputStyle.borderlessDecoration(
             fillColor: inputColor,
             prefixIcon: Icon(
@@ -241,26 +247,45 @@ class ConnectionAuthSection extends StatelessWidget {
             fontSize: 14,
             color: colorScheme.onSurface,
           ),
-          items: keysState.keys.map((key) {
-            final damaged = !key.isAvailable;
-            return DropdownMenuItem(
-              value: key.id,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(key.name),
-                  if (damaged) ...[
-                    const SizedBox(width: 6),
+          items: [
+            if (!keyExists && selectedKeyId != null)
+              DropdownMenuItem<String>(
+                value: selectedKeyId,
+                enabled: false,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Icon(
                       Icons.warning_amber,
                       size: 14,
                       color: colorScheme.error,
                     ),
+                    const SizedBox(width: 6),
+                    Text('(missing key - reselect)'),
                   ],
-                ],
+                ),
               ),
-            );
-          }).toList(),
+            ...keysState.keys.map((key) {
+              final damaged = !key.isAvailable;
+              return DropdownMenuItem(
+                value: key.id,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(key.name),
+                    if (damaged) ...[
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.warning_amber,
+                        size: 14,
+                        color: colorScheme.error,
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ],
           onChanged: (value) => onKeySelected(value),
           validator: (value) {
             if (authMethod == 'key' && value == null) {
