@@ -81,166 +81,182 @@ class TerminalMenu {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      isScrollControlled: true,
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(Icons.tune, color: DesignColors.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      context.l10n.termTerminalOptions,
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: textColor,
+          // 6 tiles + header exceed a phone's sheet height: scroll instead of
+          // overflowing (the agent-chat tile previously pushed it over).
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.tune, color: DesignColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        context.l10n.termTerminalOptions,
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              Divider(
-                height: 1,
-                color: isDark ? const Color(0xFF2A2B36) : Colors.grey.shade300,
-              ),
-              // モード切り替え（3 択・排他的単一選択・D9。modeTile は上部で定義）
-              modeTile(
-                icon: Icons.keyboard,
-                label: context.l10n.termNormalMode,
-                subtitle: context.l10n.termNormalModeSubtitle,
-                selected: mode == TerminalMode.normal,
-                onTap: () {
-                  onExitToNormalMode();
-                  Navigator.pop(context);
-                },
-              ),
-              modeTile(
-                // inventory: TERM-SCROLL-008
-                icon: Icons.swipe_up,
-                label: context.l10n.termScrollSendMode,
-                subtitle: context.l10n.termScrollSendModeSubtitle,
-                selected: mode == TerminalMode.scrollSend,
-                onTap: () {
-                  onEnterScrollSendMode();
-                  Navigator.pop(context);
-                },
-              ),
-              modeTile(
-                icon: Icons.unfold_more,
-                label: context.l10n.termSelectMode,
-                subtitle: context.l10n.termSelectModeSubtitle,
-                selected: mode == TerminalMode.select,
-                onTap: () {
-                  onEnterSelectMode();
-                  Navigator.pop(context);
-                },
-              ),
-              // ズームリセット
-              ListTile(
-                leading: Icon(
-                  Icons.zoom_out_map,
-                  color: isZoomed ? DesignColors.warning : inactiveIconColor,
-                ),
-                title: Text(
-                  context.l10n.termResetZoom,
-                  style: TextStyle(
-                    color: isZoomed ? textColor : mutedTextColor,
+                    ],
                   ),
                 ),
-                subtitle: Text(
-                  isZoomed
-                      ? context.l10n.termCurrentZoom(
-                          (effectiveZoom * 100).round(),
-                        )
-                      : context.l10n.termPinchToZoom,
-                  style: TextStyle(color: mutedTextColor, fontSize: 12),
+                Divider(
+                  height: 1,
+                  color: isDark
+                      ? const Color(0xFF2A2B36)
+                      : Colors.grey.shade300,
                 ),
-                enabled: isZoomed,
-                onTap: isZoomed
-                    ? () {
-                        onResetZoom();
-                        Navigator.pop(context);
-                      }
-                    : null,
-              ),
-              Divider(
-                height: 1,
-                color: isDark ? const Color(0xFF2A2B36) : Colors.grey.shade300,
-              ),
-              // このペインのエージェントとのチャット（AgentPaneConsoleScreen）へ
-              ListTile(
-                leading: Icon(Icons.smart_toy_outlined, color: inactiveIconColor),
-                title: Text(
-                  context.l10n.termAgentChat,
-                  style: TextStyle(color: textColor),
+                // モード切り替え（3 択・排他的単一選択・D9。modeTile は上部で定義）
+                modeTile(
+                  icon: Icons.keyboard,
+                  label: context.l10n.termNormalMode,
+                  subtitle: context.l10n.termNormalModeSubtitle,
+                  selected: mode == TerminalMode.normal,
+                  onTap: () {
+                    onExitToNormalMode();
+                    Navigator.pop(context);
+                  },
                 ),
-                subtitle: Text(
-                  context.l10n.termAgentChatSubtitle,
-                  style: TextStyle(color: mutedTextColor, fontSize: 12),
+                modeTile(
+                  // inventory: TERM-SCROLL-008
+                  icon: Icons.swipe_up,
+                  label: context.l10n.termScrollSendMode,
+                  subtitle: context.l10n.termScrollSendModeSubtitle,
+                  selected: mode == TerminalMode.scrollSend,
+                  onTap: () {
+                    onEnterScrollSendMode();
+                    Navigator.pop(context);
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  onOpenAgentChat();
-                },
-              ),
-              Divider(
-                height: 1,
-                color: isDark ? const Color(0xFF2A2B36) : Colors.grey.shade300,
-              ),
-              // 設定画面へ
-              ListTile(
-                leading: Icon(Icons.settings, color: inactiveIconColor),
-                title: Text(
-                  context.l10n.termSettings,
-                  style: TextStyle(color: textColor),
+                modeTile(
+                  icon: Icons.unfold_more,
+                  label: context.l10n.termSelectMode,
+                  subtitle: context.l10n.termSelectModeSubtitle,
+                  selected: mode == TerminalMode.select,
+                  onTap: () {
+                    onEnterSelectMode();
+                    Navigator.pop(context);
+                  },
                 ),
-                subtitle: Text(
-                  context.l10n.termSettingsSubtitle,
-                  style: TextStyle(color: mutedTextColor, fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SettingsScreen(),
+                // ズームリセット
+                ListTile(
+                  leading: Icon(
+                    Icons.zoom_out_map,
+                    color: isZoomed ? DesignColors.warning : inactiveIconColor,
+                  ),
+                  title: Text(
+                    context.l10n.termResetZoom,
+                    style: TextStyle(
+                      color: isZoomed ? textColor : mutedTextColor,
                     ),
-                  );
-                },
-              ),
-              Divider(
-                height: 1,
-                color: isDark ? const Color(0xFF2A2B36) : Colors.grey.shade300,
-              ),
-              // 切断ボタン
-              ListTile(
-                leading: Icon(
-                  Icons.power_settings_new,
-                  color: DesignColors.error,
+                  ),
+                  subtitle: Text(
+                    isZoomed
+                        ? context.l10n.termCurrentZoom(
+                            (effectiveZoom * 100).round(),
+                          )
+                        : context.l10n.termPinchToZoom,
+                    style: TextStyle(color: mutedTextColor, fontSize: 12),
+                  ),
+                  enabled: isZoomed,
+                  onTap: isZoomed
+                      ? () {
+                          onResetZoom();
+                          Navigator.pop(context);
+                        }
+                      : null,
                 ),
-                title: Text(
-                  context.l10n.termDisconnect,
-                  style: TextStyle(
+                Divider(
+                  height: 1,
+                  color: isDark
+                      ? const Color(0xFF2A2B36)
+                      : Colors.grey.shade300,
+                ),
+                // このペインのエージェントとのチャット（AgentPaneConsoleScreen）へ
+                ListTile(
+                  leading: Icon(
+                    Icons.smart_toy_outlined,
+                    color: inactiveIconColor,
+                  ),
+                  title: Text(
+                    context.l10n.termAgentChat,
+                    style: TextStyle(color: textColor),
+                  ),
+                  subtitle: Text(
+                    context.l10n.termAgentChatSubtitle,
+                    style: TextStyle(color: mutedTextColor, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onOpenAgentChat();
+                  },
+                ),
+                Divider(
+                  height: 1,
+                  color: isDark
+                      ? const Color(0xFF2A2B36)
+                      : Colors.grey.shade300,
+                ),
+                // 設定画面へ
+                ListTile(
+                  leading: Icon(Icons.settings, color: inactiveIconColor),
+                  title: Text(
+                    context.l10n.termSettings,
+                    style: TextStyle(color: textColor),
+                  ),
+                  subtitle: Text(
+                    context.l10n.termSettingsSubtitle,
+                    style: TextStyle(color: mutedTextColor, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                Divider(
+                  height: 1,
+                  color: isDark
+                      ? const Color(0xFF2A2B36)
+                      : Colors.grey.shade300,
+                ),
+                // 切断ボタン
+                ListTile(
+                  leading: Icon(
+                    Icons.power_settings_new,
                     color: DesignColors.error,
-                    fontWeight: FontWeight.w600,
                   ),
+                  title: Text(
+                    context.l10n.termDisconnect,
+                    style: TextStyle(
+                      color: DesignColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    context.l10n.termCloseSshConnection,
+                    style: TextStyle(color: mutedTextColor, fontSize: 12),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // inventory: TERM-DIALOG-011
+                    onDisconnect();
+                  },
                 ),
-                subtitle: Text(
-                  context.l10n.termCloseSshConnection,
-                  style: TextStyle(color: mutedTextColor, fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  // inventory: TERM-DIALOG-011
-                  onDisconnect();
-                },
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         );
       },
