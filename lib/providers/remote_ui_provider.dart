@@ -248,14 +248,24 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       isConnected: false,
       error: null,
       notice: null,
-      phase: 'reading-credentials',
+      phase: 'resetting-connection',
     );
 
     final previous = _client;
     _client = null;
     _paneIO = null;
     _transport = null;
-    if (previous != null) await previous.disconnect();
+    if (previous != null) {
+      // Closing a previous (possibly half-dead) console connection must
+      // never block a new attempt: a wedged close here produced the
+      // endless 'Connecting...' spinner. Best-effort, bounded.
+      try {
+        await previous.disconnect().timeout(const Duration(seconds: 5));
+      } on Object {
+        // Leave the old socket to the OS; proceed regardless.
+      }
+    }
+    state = state.copyWith(phase: 'reading-credentials');
 
     final client = SshClient();
     final isHerdr = connection.multiplexer.backend == BackendType.herdr;

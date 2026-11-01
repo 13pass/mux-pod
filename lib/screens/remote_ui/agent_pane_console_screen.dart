@@ -162,7 +162,9 @@ class _AgentPaneConsoleScreenState
   /// in a screenshot instead of an anonymous spinner.
   Widget _buildLoading(RemoteUiState remote) {
     final String phase;
-    if (remote.phase == 'reading-credentials') {
+    if (remote.phase == 'resetting-connection') {
+      phase = 'Closing previous connection…';
+    } else if (remote.phase == 'reading-credentials') {
       phase = 'Reading connection credentials…';
     } else if (remote.isConnecting) {
       phase = 'Connecting to the server…';
