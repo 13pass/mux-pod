@@ -60,10 +60,24 @@ class _AgentPaneConsoleScreenState
     unawaited(_open());
   }
 
+  /// Error shown when openPane never completes even though every step is
+  /// bounded (screen-level watchdog; belt-and-braces over the provider).
+  String? _openTimeout;
+
   Future<void> _open() async {
-    await ref
-        .read(remoteUiProvider.notifier)
-        .openPane(widget.connectionId, widget.paneId);
+    _openTimeout = null;
+    try {
+      await ref
+          .read(remoteUiProvider.notifier)
+          .openPane(widget.connectionId, widget.paneId)
+          .timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      _openTimeout =
+          'The console did not finish opening within 60s. '
+          'Tap Retry.';
+    } on Object {
+      // Provider errors are surfaced through RemoteUiState.error.
+    }
     if (mounted) setState(() => _opening = false);
   }
 
@@ -216,9 +230,10 @@ class _AgentPaneConsoleScreenState
               Text(
                 (remote.error != null && remote.error!.isNotEmpty)
                     ? remote.error!
-                    : 'No AI agent detected in this pane.\n'
-                          'Start an agent (vibe, claude, codex, droid) there '
-                          'and reopen the console.',
+                    : (_openTimeout ??
+                          'No AI agent detected in this pane.\n'
+                              'Start an agent (vibe, claude, codex, droid) there '
+                              'and reopen the console.'),
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: textMuted),
