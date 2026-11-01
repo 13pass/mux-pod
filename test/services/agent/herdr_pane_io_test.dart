@@ -13,15 +13,18 @@ const _snapshotJson = '''
   "tabs":[
     {"tab_id":"w5:t1","label":"shell","workspace_id":"w5"},
     {"tab_id":"w5:t3","label":"muxpod","workspace_id":"w5"},
-    {"tab_id":"w5:t4","label":"srv","workspace_id":"w5"}
+    {"tab_id":"w5:t4","label":"srv","workspace_id":"w5"},
+    {"tab_id":"w5:t5","label":"gitea","workspace_id":"w5"}
   ],
   "panes":[
     {"pane_id":"w5:p1","workspace_id":"w5","tab_id":"w5:t1","cwd":"/home/vincent/agents/vibe/revision-loyers"},
     {"pane_id":"w5:p3","workspace_id":"w5","tab_id":"w5:t3","cwd":"/home/vincent/agents/vibe","terminal_title":"Vibe"},
-    {"pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"}
+    {"pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"},
+    {"pane_id":"w5:p5","workspace_id":"w5","tab_id":"w5:t5","cwd":"/srv/gitea"}
   ],
   "agents":[
-    {"agent":"claude","agent_status":"idle","pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"}
+    {"agent":"claude","agent_status":"idle","pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"},
+    {"agent":"mistral-vibe","agent_status":"working","pane_id":"w5:p5","workspace_id":"w5","tab_id":"w5:t5","cwd":"/srv/gitea"}
   ]
 }}}
 ''';
@@ -55,7 +58,7 @@ void main() {
 
       final panes = await io.listPanes();
 
-      expect(panes, hasLength(3));
+      expect(panes, hasLength(4));
       expect(panes[0], isA<AgentPaneInfo>());
       expect(panes[0].id, 'w5:p1');
       expect(panes[0].command, 'zsh');
@@ -69,6 +72,9 @@ void main() {
       // herdr's own report identifies w5:p4 (its foreground process is a
       // wrapper); no probe was issued for it and the report wins.
       expect(panes[2].command, 'claude');
+      // The herdr-vibe plugin reports Vibe sessions as "mistral-vibe".
+      expect(panes[3].command, 'mistral-vibe');
+      expect(panes[3].tab, 'gitea');
       // The custom herdr binary path is used (after the test -x probe).
       expect(t.execCommands.first, 'test -x -- /usr/local/bin/herdr');
       expect(t.execCommands[1], '/usr/local/bin/herdr api snapshot');
@@ -80,6 +86,7 @@ void main() {
       expect(probes.single, contains('w5:p1'));
       expect(probes.single, contains('w5:p3'));
       expect(probes.single, isNot(contains('w5:p4')));
+      expect(probes.single, isNot(contains('w5:p5')));
     });
 
     test(
@@ -213,10 +220,11 @@ void main() {
         throw StateError('unexpected: $command');
       };
       final panes = await io.listPanes();
-      expect(panes, hasLength(3));
+      expect(panes, hasLength(4));
       expect(panes[0].command, isNull); // the vanished pane
       expect(panes[1].command, 'vibe');
       expect(panes[2].command, 'claude'); // from herdr's own report
+      expect(panes[3].command, 'mistral-vibe'); // from herdr's own report
     });
   });
 }

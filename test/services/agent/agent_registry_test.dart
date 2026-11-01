@@ -23,12 +23,16 @@ void main() {
       expect(AgentRegistry.detect('codex'), isA<CodexAdapter>());
       expect(AgentRegistry.detect('droid'), isA<FactoryDroidAdapter>());
       expect(AgentRegistry.detect('vibe'), isA<VibeAdapter>());
-      // vibe ships as the vibe-rs binary on some installs.
+      // vibe ships as the vibe-rs binary on some installs, and the
+      // herdr-vibe plugin reports vibe sessions to herdr as
+      // "mistral-vibe" (herdr's own agent report wins over the
+      // foreground process name in pane detection).
       expect(AgentRegistry.detect('vibe-rs'), isA<VibeAdapter>());
       expect(
         AgentRegistry.detect('/home/u/.local/bin/vibe-rs'),
         isA<VibeAdapter>(),
       );
+      expect(AgentRegistry.detect('mistral-vibe'), isA<VibeAdapter>());
     });
 
     test('matches absolute paths by basename', () {
