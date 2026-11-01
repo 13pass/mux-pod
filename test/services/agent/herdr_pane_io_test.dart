@@ -126,6 +126,70 @@ void main() {
     );
 
     test(
+      'listPanes falls back to per-pane probes when the batch exec throws',
+      () async {
+        final t = FakeAgentTransport();
+        final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+        t.onExec = (command) {
+          if (command.startsWith('test -x -- ')) return '';
+          if (command.contains('api snapshot')) return _snapshotJson;
+          if (command.contains('<<<MUXPOD')) {
+            throw StateError('channel error'); // transient exec failure
+          }
+          if (command.contains('process-info --pane w5:p1')) {
+            return _processInfoJson('zsh');
+          }
+          if (command.contains('process-info --pane w5:p3')) {
+            return _processInfoJson('Vibe CLI');
+          }
+          throw StateError('unexpected: $command');
+        };
+
+        final panes = await io.listPanes();
+
+        expect(panes[0].command, 'zsh');
+        expect(panes[1].command, 'vibe');
+        expect(panes[2].command, 'claude'); // herdr report wins on fallback
+        expect(panes[3].command, 'mistral-vibe');
+        final probes = t.execCommands
+            .where(
+              (c) =>
+                  c.contains('process-info --pane') && !c.contains('<<<MUXPOD'),
+            )
+            .toList();
+        expect(probes, hasLength(2));
+      },
+    );
+
+    test('snapshot exec retries once after a transient failure', () async {
+      final t = FakeAgentTransport();
+      final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+      var snapshotCalls = 0;
+      t.onExec = (command) {
+        if (command.startsWith('test -x -- ')) return '';
+        if (command.contains('api snapshot')) {
+          snapshotCalls++;
+          if (snapshotCalls == 1) throw StateError('transient');
+          return _snapshotJson;
+        }
+        if (command.contains('<<<MUXPOD')) {
+          return '\n<<<MUXPOD:w5:p1>>>'
+              '${_processInfoJson('zsh')}'
+              '\n<<<MUXPOD:w5:p3>>>'
+              '${_processInfoJson('Vibe CLI')}';
+        }
+        throw StateError('unexpected: $command');
+      };
+
+      final panes = await io.listPanes();
+
+      expect(snapshotCalls, 2); // one transient failure + one retry
+      expect(panes, hasLength(4));
+      expect(panes[0].command, 'zsh');
+      expect(panes[1].command, 'vibe');
+    });
+
+    test(
       'currentCommand returns the lowercased first word of the process name',
       () async {
         final t = FakeAgentTransport();

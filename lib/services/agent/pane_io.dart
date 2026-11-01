@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../command/command_request.dart';
+import '../command/command_result.dart';
 import '../tmux/commands/content_commands.dart';
 import '../tmux/commands/input_commands.dart';
 import '../tmux/tmux_command_executor.dart';
@@ -256,16 +257,28 @@ class HerdrPaneIO implements PaneIO {
       return (panes: cached.panes, agentNames: cached.agentNames);
     }
     final bin = await _bin();
-    final snapshot = await _transport.execWithExitCode(
-      '$bin api snapshot',
-      timeout: _execTimeout,
-    );
-    if (snapshot.exitCode != 0 || snapshot.stdout.trim().isEmpty) {
-      throw StateError(
-        'herdr api snapshot failed (exit ${snapshot.exitCode})'
-        '${snapshot.stderr.trim().isEmpty ? '' : ': ${snapshot.stderr.trim()}'}',
-      );
+    // The snapshot is the one irreplacable call (pane enumeration); a
+    // transient channel failure gets one retry before giving up.
+    CommandResult? snapshot;
+    var lastError = 'herdr api snapshot failed';
+    for (var attempt = 0; attempt < 2 && snapshot == null; attempt++) {
+      try {
+        final result = await _transport.execWithExitCode(
+          '$bin api snapshot',
+          timeout: _execTimeout,
+        );
+        if (result.exitCode == 0 && result.stdout.trim().isNotEmpty) {
+          snapshot = result;
+        } else {
+          lastError =
+              'herdr api snapshot failed (exit ${result.exitCode})'
+              '${result.stderr.trim().isEmpty ? '' : ': ${result.stderr.trim()}'}';
+        }
+      } on Object catch (e) {
+        lastError = 'herdr api snapshot failed: $e';
+      }
     }
+    if (snapshot == null) throw StateError(lastError);
     final decoded = jsonDecode(snapshot.stdout);
     final result = decoded is Map<String, dynamic> ? resultOf(decoded) : null;
     final snapshotObj = result is Map<String, dynamic>
@@ -389,13 +402,21 @@ class HerdrPaneIO implements PaneIO {
         .toList();
     if (safe.isEmpty) return const {};
     final bin = await _bin();
-    final out = await _transport.execWithExitCode(
-      'for p in ${safe.join(' ')}; do '
-      'printf \'\\n<<<MUXPOD:%s>>>\' "\$p"; '
-      '$bin pane process-info --pane "\$p" 2>/dev/null; '
-      'done; true',
-      timeout: _execTimeout,
-    );
+    late final CommandResult out;
+    try {
+      out = await _transport.execWithExitCode(
+        'for p in ${safe.join(' ')}; do '
+        'printf \'\\n<<<MUXPOD:%s>>>\' "\$p"; '
+        '$bin pane process-info --pane "\$p" 2>/dev/null; '
+        'done; true',
+        timeout: _execTimeout,
+      );
+    } on Object {
+      // A transient exec failure (channel error, timeout under lock
+      // contention) must degrade to the per-pane fallback, not kill the
+      // whole scan.
+      return null;
+    }
     if (out.exitCode != 0) return null;
     final marker = RegExp(r'<<<MUXPOD:([^>]+)>>>');
     final matches = marker.allMatches(out.stdout).toList();

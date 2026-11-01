@@ -218,7 +218,13 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
             : null,
       );
     } on Object catch (e) {
-      state = state.copyWith(isBusy: false, error: '$e');
+      // Keep the failure visible in the status area (screenshots must
+      // explain themselves), not only as a transient snackbar.
+      state = state.copyWith(
+        isBusy: false,
+        error: '$e',
+        detectDetail: 'detection failed: $e',
+      );
     }
   }
 

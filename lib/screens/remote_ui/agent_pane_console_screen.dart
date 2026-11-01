@@ -65,8 +65,14 @@ class _AgentPaneConsoleScreenState
   /// bounded (screen-level watchdog; belt-and-braces over the provider).
   String? _openTimeout;
 
+  /// Error thrown by openPane itself (it normally reports failures
+  /// through RemoteUiState.error; anything escaping must still be
+  /// visible in a screenshot).
+  String? _openError;
+
   Future<void> _open() async {
     _openTimeout = null;
+    _openError = null;
     try {
       await ref
           .read(remoteUiProvider.notifier)
@@ -76,8 +82,8 @@ class _AgentPaneConsoleScreenState
       _openTimeout =
           'The console did not finish opening within 60s. '
           'Tap Retry.';
-    } on Object {
-      // Provider errors are surfaced through RemoteUiState.error.
+    } on Object catch (e) {
+      _openError = 'Console failed to open: $e';
     }
     if (mounted) setState(() => _opening = false);
   }
@@ -100,10 +106,12 @@ class _AgentPaneConsoleScreenState
         ).showSnackBar(SnackBar(content: Text(notice)));
         ref.read(remoteUiProvider.notifier).clearMessages();
       } else if (error != null && error.isNotEmpty && error != prev?.error) {
+        // Errors stay in the state: the status area keeps showing the
+        // cause. Clearing here made transient exec failures vanish into
+        // the bare "No AI agent detected" screen.
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(error)));
-        ref.read(remoteUiProvider.notifier).clearMessages();
       }
     });
 
@@ -280,9 +288,11 @@ class _AgentPaneConsoleScreenState
               Icon(Icons.smart_toy_outlined, size: 48, color: textMuted),
               const SizedBox(height: 12),
               Text(
+                key: const Key('agent_console.status_message'),
                 (remote.error != null && remote.error!.isNotEmpty)
                     ? remote.error!
                     : (_openTimeout ??
+                          _openError ??
                           (widget.paneId == null
                               ? 'No AI agent detected on this server.\n'
                                     'Start an agent (vibe, claude, codex, droid) '

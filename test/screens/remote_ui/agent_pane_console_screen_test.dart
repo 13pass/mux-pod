@@ -18,6 +18,9 @@ class _FixedRemoteUiNotifier extends RemoteUiNotifier {
   @override
   RemoteUiState build() => initial;
 
+  /// Emits a new state so ref.listen callbacks fire (provider errors).
+  void emit(RemoteUiState next) => state = next;
+
   @override
   Future<void> openPane(String connectionId, String? paneId) async {
     calls.add('openPane($connectionId, $paneId)');
@@ -175,5 +178,28 @@ void main() {
       find.byKey(const Key('agent_console.agent_chip_w5:p3')),
       findsNothing,
     );
+  });
+
+  testWidgets('keeps a provider error visible in the status area', (
+    tester,
+  ) async {
+    final remote = _FixedRemoteUiNotifier(
+      RemoteUiState(connectionId: 'c1', isConnected: true),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+
+    // The provider reports a transient exec failure (e.g. a scan that
+    // died on a timeout).
+    remote.emit(remote.initial.copyWith(error: 'Command execution timed out'));
+    await tester.pump();
+
+    // The status area message becomes the error itself (the snackbar
+    // may still be animating out; the keyed status text is the
+    // persistence contract).
+    final status = tester.widget<Text>(
+      find.byKey(const Key('agent_console.status_message')),
+    );
+    expect(status.data, 'Command execution timed out');
   });
 }
