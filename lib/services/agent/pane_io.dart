@@ -7,6 +7,7 @@ import '../tmux/commands/input_commands.dart';
 import '../tmux/tmux_command_executor.dart';
 import '../tmux/tmux_facade.dart';
 import 'agent_adapter.dart';
+import 'agent_registry.dart';
 import 'agent_transport.dart';
 
 /// One pane of the server's multiplexer, as seen by agent detection.
@@ -468,15 +469,10 @@ class HerdrPaneIO implements PaneIO {
         final processes = processInfo is Map<String, dynamic>
             ? processInfo['foreground_processes']
             : null;
-        if (processes is! List || processes.isEmpty) continue;
-        final first = processes.first;
-        if (first is! Map<String, dynamic>) continue;
-        final name = first['name'];
-        if (name is! String || name.isEmpty) continue;
-        // Same normalization as [currentCommand]: herdr reports display
-        // names like "Vibe CLI"; detection matches the first word
-        // lowercased ("vibe").
-        commands[paneId] = name.split(' ').first.toLowerCase();
+        // Same agent-first picking as [currentCommand]: herdr may list
+        // lingering helpers (xdg-open) ahead of the pane's agent.
+        final name = _pickForegroundProcessName(processes);
+        if (name != null) commands[paneId] = name;
       } on Object {
         // Unparseable chunk: leave this pane unresolved.
       }
@@ -566,14 +562,30 @@ class HerdrPaneIO implements PaneIO {
         : null;
     if (processInfo is! Map<String, dynamic>) return null;
     final processes = processInfo['foreground_processes'];
-    if (processes is! List || processes.isEmpty) return null;
-    final first = processes.first;
-    if (first is! Map<String, dynamic>) return null;
-    final name = first['name'];
-    if (name is! String || name.isEmpty) return null;
-    // herdr reports display names like "Vibe CLI"; detection matches on the
-    // first word lowercased ("vibe"), mirroring tmux basename matching.
-    return name.split(' ').first.toLowerCase();
+    return _pickForegroundProcessName(processes);
+  }
+
+  /// Picks the pane's representative process name from herdr's
+  /// foreground process list: the first entry that is a KNOWN agent
+  /// (herdr lists lingering helpers like xdg-open ahead of the agent),
+  /// else the first entry. Names normalize like [currentCommand]:
+  /// display names such as "Vibe CLI" reduce to their first word
+  /// lowercased ("vibe").
+  static String? _pickForegroundProcessName(List? processes) {
+    if (processes == null || processes.isEmpty) return null;
+    final names = <String>[];
+    for (final entry in processes) {
+      if (entry is! Map<String, dynamic>) continue;
+      final name = entry['name'];
+      if (name is String && name.isNotEmpty) {
+        names.add(name.split(' ').first.toLowerCase());
+      }
+    }
+    if (names.isEmpty) return null;
+    for (final name in names) {
+      if (AgentRegistry.detect(name) != null) return name;
+    }
+    return names.first;
   }
 
   @override

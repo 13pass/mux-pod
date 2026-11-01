@@ -218,6 +218,83 @@ void main() {
     });
 
     test(
+      'currentCommand prefers a known agent among the foreground list',
+      () async {
+        final t = FakeAgentTransport();
+        final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+        // herdr lists lingering helpers (xdg-open) ahead of the pane's
+        // real agent (verified on a live server).
+        t.onExec = (command) {
+          if (command.startsWith('test -x -- ')) return '';
+          if (command.contains('process-info --pane w5:p8')) {
+            return '''
+{"id":"cli:pane:process_info","result":{"process_info":{
+  "pane_id":"x","shell_pid":1,
+  "foreground_processes":[
+    {"name":"xdg-open","pid":1},
+    {"name":"xdg-open","pid":2},
+    {"name":"xdg-open","pid":3},
+    {"name":"vibe-rs","pid":4}
+  ]
+}}}
+''';
+          }
+          throw StateError('unexpected: $command');
+        };
+        expect(await io.currentCommand('w5:p8'), 'vibe-rs');
+      },
+    );
+
+    test(
+      'currentCommand falls back to the first process without an agent',
+      () async {
+        final t = FakeAgentTransport();
+        final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+        t.onExec = (command) {
+          if (command.startsWith('test -x -- ')) return '';
+          if (command.contains('process-info')) {
+            return '''
+{"id":"cli:pane:process_info","result":{"process_info":{
+  "pane_id":"x","shell_pid":1,
+  "foreground_processes":[
+    {"name":"node","pid":1},
+    {"name":"vim","pid":2}
+  ]
+}}}
+''';
+          }
+          throw StateError('unexpected: $command');
+        };
+        expect(await io.currentCommand('w5:p8'), 'node');
+      },
+    );
+
+    test(
+      'batched scan also prefers a known agent in the foreground list',
+      () async {
+        final t = FakeAgentTransport();
+        final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+        t.onExec = (command) {
+          if (command.startsWith('test -x -- ')) return '';
+          if (command.contains('api snapshot')) return _snapshotJson;
+          if (command.contains('<<<MUXPOD')) {
+            return '\n<<<MUXPOD:w5:p1>>>'
+                '${_processInfoJson('zsh')}'
+                '\n<<<MUXPOD:w5:p3>>>'
+                '{"id":"cli:pane:process_info","result":{"process_info":{'
+                '"pane_id":"x","shell_pid":1,"foreground_processes":['
+                '{"name":"xdg-open","pid":1},{"name":"vibe-rs","pid":2}]}}}';
+          }
+          throw StateError('unexpected: $command');
+        };
+        final panes = await io.listPanes();
+        // xdg-open comes first in the list but the agent wins.
+        expect(panes[1].command, 'vibe-rs');
+        expect(panes[0].command, 'zsh');
+      },
+    );
+
+    test(
       'currentCommand returns the lowercased first word of the process name',
       () async {
         final t = FakeAgentTransport();
