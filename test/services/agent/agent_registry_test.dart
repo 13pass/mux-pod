@@ -23,11 +23,20 @@ void main() {
       expect(AgentRegistry.detect('codex'), isA<CodexAdapter>());
       expect(AgentRegistry.detect('droid'), isA<FactoryDroidAdapter>());
       expect(AgentRegistry.detect('vibe'), isA<VibeAdapter>());
+      // vibe ships as the vibe-rs binary on some installs.
+      expect(AgentRegistry.detect('vibe-rs'), isA<VibeAdapter>());
+      expect(
+        AgentRegistry.detect('/home/u/.local/bin/vibe-rs'),
+        isA<VibeAdapter>(),
+      );
     });
 
     test('matches absolute paths by basename', () {
       expect(AgentRegistry.detect('/usr/bin/codex'), isA<CodexAdapter>());
-      expect(AgentRegistry.detect('/home/u/.local/bin/vibe'), isA<VibeAdapter>());
+      expect(
+        AgentRegistry.detect('/home/u/.local/bin/vibe'),
+        isA<VibeAdapter>(),
+      );
       expect(
         AgentRegistry.detect('/usr/local/bin/claude'),
         isA<ClaudeCodeAdapter>(),

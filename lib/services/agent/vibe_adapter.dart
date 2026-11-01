@@ -32,24 +32,24 @@ class VibeAdapter extends AgentAdapter {
   AgentKind get kind => AgentKind.vibe;
 
   @override
-  List<String> get processNames => const ['vibe'];
+  List<String> get processNames => const ['vibe', 'vibe-rs'];
 
   @override
   AgentCapabilities get capabilities => const AgentCapabilities(
-        // Model aliases are user-defined in ~/.vibe/config.toml
-        // ([[models]] / providers), so free-text entry.
-        availableModels: [],
-        // Vibe has no reasoning-effort flag (neither TUI nor headless).
-        intelligenceLevels: [],
-        permissionLevels: [
-          UnifiedPermission.readOnly,
-          UnifiedPermission.defaultPermissions,
-          UnifiedPermission.autoReview,
-          UnifiedPermission.fullAccess,
-          UnifiedPermission.custom,
-        ],
-        supportsPlanMode: false,
-      );
+    // Model aliases are user-defined in ~/.vibe/config.toml
+    // ([[models]] / providers), so free-text entry.
+    availableModels: [],
+    // Vibe has no reasoning-effort flag (neither TUI nor headless).
+    intelligenceLevels: [],
+    permissionLevels: [
+      UnifiedPermission.readOnly,
+      UnifiedPermission.defaultPermissions,
+      UnifiedPermission.autoReview,
+      UnifiedPermission.fullAccess,
+      UnifiedPermission.custom,
+    ],
+    supportsPlanMode: false,
+  );
 
   // ===== Pure mappings (unit-tested directly) =====
 

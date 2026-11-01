@@ -53,7 +53,8 @@ class AgentConfigService {
     final tempPath = '$path$tempSuffix';
     // base64 contains only [A-Za-z0-9+/=], so single-quoting is safe.
     final encoded = base64.encode(utf8.encode(content));
-    final command = 'mkdir -p -- "$dir" && '
+    final command =
+        'mkdir -p -- "$dir" && '
         '( [ -f "$backupPath" ] || [ ! -f "$path" ] || cp -- "$path" "$backupPath" ) && '
         "printf '%s' '$encoded' | base64 -d > \"$tempPath\" && "
         'mv -f -- "$tempPath" "$path"';

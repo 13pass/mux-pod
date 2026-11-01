@@ -57,36 +57,36 @@ String buildHeadlessCommand({
 }) {
   final command = switch (kind) {
     AgentKind.claudeCode => _buildClaudeCommand(
-        prompt,
-        model: model,
-        intelligence: intelligence,
-        permission: permission,
-        planMode: planMode,
-        resumeSessionId: resumeSessionId,
-      ),
+      prompt,
+      model: model,
+      intelligence: intelligence,
+      permission: permission,
+      planMode: planMode,
+      resumeSessionId: resumeSessionId,
+    ),
     AgentKind.codex => _buildCodexCommand(
-        prompt,
-        model: model,
-        intelligence: intelligence,
-        permission: permission,
-        resumeSessionId: resumeSessionId,
-      ),
+      prompt,
+      model: model,
+      intelligence: intelligence,
+      permission: permission,
+      resumeSessionId: resumeSessionId,
+    ),
     AgentKind.droid => _buildDroidCommand(
-        prompt,
-        model: model,
-        intelligence: intelligence,
-        permission: permission,
-        planMode: planMode,
-        resumeSessionId: resumeSessionId,
-      ),
+      prompt,
+      model: model,
+      intelligence: intelligence,
+      permission: permission,
+      planMode: planMode,
+      resumeSessionId: resumeSessionId,
+    ),
     // Vibe has no reasoning-effort or plan-mode flags; intelligence and
     // planMode are intentionally not forwarded (see _buildVibeCommand).
     AgentKind.vibe => _buildVibeCommand(
-        prompt,
-        model: model,
-        permission: permission,
-        resumeSessionId: resumeSessionId,
-      ),
+      prompt,
+      model: model,
+      permission: permission,
+      resumeSessionId: resumeSessionId,
+    ),
   };
 
   final dir = workingDirectory;
@@ -142,14 +142,14 @@ String _buildClaudeCommand(
 /// Maps unified reasoning levels to Claude `--effort` values.
 /// https://code.claude.com/docs/en/cli-reference (`--effort`).
 String? _claudeEffort(UnifiedIntelligence? level) => switch (level) {
-      UnifiedIntelligence.low => 'low',
-      UnifiedIntelligence.medium => 'medium',
-      UnifiedIntelligence.high => 'high',
-      UnifiedIntelligence.extraHigh => 'xhigh',
-      UnifiedIntelligence.max => 'max',
-      UnifiedIntelligence.ultra => 'ultracode',
-      null => null,
-    };
+  UnifiedIntelligence.low => 'low',
+  UnifiedIntelligence.medium => 'medium',
+  UnifiedIntelligence.high => 'high',
+  UnifiedIntelligence.extraHigh => 'xhigh',
+  UnifiedIntelligence.max => 'max',
+  UnifiedIntelligence.ultra => 'ultracode',
+  null => null,
+};
 
 /// Maps unified autonomy to Claude `--permission-mode` values.
 /// https://code.claude.com/docs/en/permission-modes
@@ -228,27 +228,27 @@ String _buildCodexCommand(
 /// prompts can never be answered. [UnifiedPermission.custom] (and null)
 /// defers to `config.toml`.
 String? _codexSandbox(UnifiedPermission? permission) => switch (permission) {
-      UnifiedPermission.readOnly => 'read-only',
-      UnifiedPermission.defaultPermissions => 'workspace-write',
-      UnifiedPermission.autoReview => 'workspace-write',
-      UnifiedPermission.fullAccess => 'danger-full-access',
-      UnifiedPermission.custom => null,
-      null => null,
-    };
+  UnifiedPermission.readOnly => 'read-only',
+  UnifiedPermission.defaultPermissions => 'workspace-write',
+  UnifiedPermission.autoReview => 'workspace-write',
+  UnifiedPermission.fullAccess => 'danger-full-access',
+  UnifiedPermission.custom => null,
+  null => null,
+};
 
 /// Maps unified reasoning levels to Codex `model_reasoning_effort` values.
 ///
 /// Codex supports at most `xhigh`; [UnifiedIntelligence.max] and
 /// [UnifiedIntelligence.ultra] clamp to it.
 String? _codexEffort(UnifiedIntelligence? level) => switch (level) {
-      UnifiedIntelligence.low => 'low',
-      UnifiedIntelligence.medium => 'medium',
-      UnifiedIntelligence.high => 'high',
-      UnifiedIntelligence.extraHigh => 'xhigh',
-      UnifiedIntelligence.max => 'xhigh',
-      UnifiedIntelligence.ultra => 'xhigh',
-      null => null,
-    };
+  UnifiedIntelligence.low => 'low',
+  UnifiedIntelligence.medium => 'medium',
+  UnifiedIntelligence.high => 'high',
+  UnifiedIntelligence.extraHigh => 'xhigh',
+  UnifiedIntelligence.max => 'xhigh',
+  UnifiedIntelligence.ultra => 'xhigh',
+  null => null,
+};
 
 String _buildDroidCommand(
   String prompt, {
@@ -290,13 +290,13 @@ String _buildDroidCommand(
 /// to `--auto high` rather than `--skip-permissions-unsafe`, which Factory
 /// reserves for disposable containers.
 String? _droidAutoLevel(UnifiedPermission? permission) => switch (permission) {
-      UnifiedPermission.readOnly => null,
-      UnifiedPermission.defaultPermissions => 'low',
-      UnifiedPermission.autoReview => 'medium',
-      UnifiedPermission.fullAccess => 'high',
-      UnifiedPermission.custom => null,
-      null => null,
-    };
+  UnifiedPermission.readOnly => null,
+  UnifiedPermission.defaultPermissions => 'low',
+  UnifiedPermission.autoReview => 'medium',
+  UnifiedPermission.fullAccess => 'high',
+  UnifiedPermission.custom => null,
+  null => null,
+};
 
 /// Maps unified reasoning levels to Droid `-r/--reasoning-effort` values.
 ///
@@ -304,14 +304,14 @@ String? _droidAutoLevel(UnifiedPermission? permission) => switch (permission) {
 /// `low|medium|high` pass through and anything higher clamps to `high`,
 /// the documented safe ceiling.
 String? _droidEffort(UnifiedIntelligence? level) => switch (level) {
-      UnifiedIntelligence.low => 'low',
-      UnifiedIntelligence.medium => 'medium',
-      UnifiedIntelligence.high => 'high',
-      UnifiedIntelligence.extraHigh => 'high',
-      UnifiedIntelligence.max => 'high',
-      UnifiedIntelligence.ultra => 'high',
-      null => null,
-    };
+  UnifiedIntelligence.low => 'low',
+  UnifiedIntelligence.medium => 'medium',
+  UnifiedIntelligence.high => 'high',
+  UnifiedIntelligence.extraHigh => 'high',
+  UnifiedIntelligence.max => 'high',
+  UnifiedIntelligence.ultra => 'high',
+  null => null,
+};
 
 String _buildVibeCommand(
   String prompt, {
@@ -349,10 +349,10 @@ String _buildVibeCommand(
 /// approves everything. [UnifiedPermission.custom] (and null) defers to
 /// the `default_agent` config setting.
 String? _vibeAgent(UnifiedPermission? permission) => switch (permission) {
-      UnifiedPermission.readOnly => 'ask',
-      UnifiedPermission.defaultPermissions => 'accept-edits',
-      UnifiedPermission.autoReview => 'smart-approve',
-      UnifiedPermission.fullAccess => 'auto-approve',
-      UnifiedPermission.custom => null,
-      null => null,
-    };
+  UnifiedPermission.readOnly => 'ask',
+  UnifiedPermission.defaultPermissions => 'accept-edits',
+  UnifiedPermission.autoReview => 'smart-approve',
+  UnifiedPermission.fullAccess => 'auto-approve',
+  UnifiedPermission.custom => null,
+  null => null,
+};

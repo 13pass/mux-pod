@@ -268,76 +268,83 @@ class SshCommandExecutor {
     };
 
     // ロック取得を含めて非同期で開始し、ストリームは即座に返す。
-    unawaited(_withExecLock(() async {
-      if (cancelled) return;
-      try {
-        session = await client()!.execute('bash -s');
-        session!.write(utf8.encode('$command\n'));
-        unawaited(session!.stdin.close());
-        // execute() 完了までにキャンセルされた場合は、起動したばかりの
-        // リモートプロセスを放置せずチャネルを閉じて終了させる。
-        if (cancelled) {
-          session?.close();
-          return;
-        }
-        final activeSession = session!;
-
-        // stdoutは増分デコードしてそのまま流す
-        final stdoutDone = Completer<void>();
-        final stdoutSubscription =
-            activeSession.stdout.cast<List<int>>().transform(utf8.decoder).listen(
-          (text) {
-            if (!controller.isClosed) controller.add(text);
-          },
-          onDone: () => stdoutDone.complete(),
-          onError: (Object e) => stdoutDone.completeError(e),
-        );
-
-        // stderrはエラー報告用にバッファするだけ（ストリームには流さない）
-        final stderrBytes = <int>[];
-        final stderrDone = Completer<void>();
-        final stderrSubscription = activeSession.stderr.listen(
-          (data) => stderrBytes.addAll(data),
-          onDone: () => stderrDone.complete(),
-          onError: (Object e) => stderrDone.completeError(e),
-        );
-
+    unawaited(
+      _withExecLock(() async {
+        if (cancelled) return;
         try {
-          // キャンセルとのレース: キャンセル時はリモートのCLOSE待ちで
-          // 永久にブロックせず、ロック解放を優先する。
-          await Future.any([
-            Future.wait([stdoutDone.future, stderrDone.future]),
-            cancelCompleter.future,
-          ]);
-        } finally {
-          await stdoutSubscription.cancel();
-          await stderrSubscription.cancel();
-        }
+          session = await client()!.execute('bash -s');
+          session!.write(utf8.encode('$command\n'));
+          unawaited(session!.stdin.close());
+          // execute() 完了までにキャンセルされた場合は、起動したばかりの
+          // リモートプロセスを放置せずチャネルを閉じて終了させる。
+          if (cancelled) {
+            session?.close();
+            return;
+          }
+          final activeSession = session!;
 
-        final exitCode = activeSession.exitCode;
-        activeSession.close();
+          // stdoutは増分デコードしてそのまま流す
+          final stdoutDone = Completer<void>();
+          final stdoutSubscription = activeSession.stdout
+              .cast<List<int>>()
+              .transform(utf8.decoder)
+              .listen(
+                (text) {
+                  if (!controller.isClosed) controller.add(text);
+                },
+                onDone: () => stdoutDone.complete(),
+                onError: (Object e) => stdoutDone.completeError(e),
+              );
 
-        if (controller.isClosed) return;
-        if (exitCode != null && exitCode != 0) {
-          final stderrText =
-              utf8.decode(stderrBytes, allowMalformed: true).trim();
-          controller.addError(SshConnectionError(
-            'Command exited with code $exitCode'
-            '${stderrText.isEmpty ? '' : ': $stderrText'}',
-          ));
+          // stderrはエラー報告用にバッファするだけ（ストリームには流さない）
+          final stderrBytes = <int>[];
+          final stderrDone = Completer<void>();
+          final stderrSubscription = activeSession.stderr.listen(
+            (data) => stderrBytes.addAll(data),
+            onDone: () => stderrDone.complete(),
+            onError: (Object e) => stderrDone.completeError(e),
+          );
+
+          try {
+            // キャンセルとのレース: キャンセル時はリモートのCLOSE待ちで
+            // 永久にブロックせず、ロック解放を優先する。
+            await Future.any([
+              Future.wait([stdoutDone.future, stderrDone.future]),
+              cancelCompleter.future,
+            ]);
+          } finally {
+            await stdoutSubscription.cancel();
+            await stderrSubscription.cancel();
+          }
+
+          final exitCode = activeSession.exitCode;
+          activeSession.close();
+
+          if (controller.isClosed) return;
+          if (exitCode != null && exitCode != 0) {
+            final stderrText = utf8
+                .decode(stderrBytes, allowMalformed: true)
+                .trim();
+            controller.addError(
+              SshConnectionError(
+                'Command exited with code $exitCode'
+                '${stderrText.isEmpty ? '' : ': $stderrText'}',
+              ),
+            );
+          }
+          await controller.close();
+        } catch (e) {
+          session?.close();
+          if (controller.isClosed) return;
+          controller.addError(
+            e is SshConnectionError
+                ? e
+                : SshConnectionError('Failed to execute command: $e', e),
+          );
+          await controller.close();
         }
-        await controller.close();
-      } catch (e) {
-        session?.close();
-        if (controller.isClosed) return;
-        controller.addError(
-          e is SshConnectionError
-              ? e
-              : SshConnectionError('Failed to execute command: $e', e),
-        );
-        await controller.close();
-      }
-    }));
+      }),
+    );
 
     return controller.stream;
   }

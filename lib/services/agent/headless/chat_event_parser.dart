@@ -50,10 +50,7 @@ import 'chat_event.dart';
 /// an `async*` generator suspended in `await for` on a silent source does
 /// not process cancellation until the source emits, which would hang
 /// [HeadlessAgentSession.cancel].
-Stream<ChatEvent> parseAgentEventStream(
-  AgentKind kind,
-  Stream<String> chunks,
-) {
+Stream<ChatEvent> parseAgentEventStream(AgentKind kind, Stream<String> chunks) {
   late StreamController<ChatEvent> controller;
   StreamSubscription<String>? sourceSubscription;
   final pending = StringBuffer();
@@ -64,8 +61,10 @@ Stream<ChatEvent> parseAgentEventStream(
     while (true) {
       final newline = text.indexOf('\n', start);
       if (newline == -1) break;
-      for (final event
-          in parseAgentOutputLine(kind, text.substring(start, newline))) {
+      for (final event in parseAgentOutputLine(
+        kind,
+        text.substring(start, newline),
+      )) {
         controller.add(event);
       }
       start = newline + 1;
@@ -163,22 +162,26 @@ List<ChatEvent> _parseClaudeEvent(Map<String, dynamic> json) {
     }
     final costUsd = _asDouble(json['total_cost_usd']);
     if (inputTokens != null || outputTokens != null || costUsd != null) {
-      events.add(UsageUpdated(
-        inputTokens: inputTokens,
-        outputTokens: outputTokens,
-        costUsd: costUsd,
-      ));
+      events.add(
+        UsageUpdated(
+          inputTokens: inputTokens,
+          outputTokens: outputTokens,
+          costUsd: costUsd,
+        ),
+      );
     }
     final subtype = json['subtype'];
     final failed =
         json['is_error'] == true || (subtype is String && subtype != 'success');
     if (failed) {
       final result = json['result'];
-      events.add(RunFailed(
-        result is String && result.isNotEmpty
-            ? result
-            : 'Claude run failed${subtype is String ? ' ($subtype)' : ''}',
-      ));
+      events.add(
+        RunFailed(
+          result is String && result.isNotEmpty
+              ? result
+              : 'Claude run failed${subtype is String ? ' ($subtype)' : ''}',
+        ),
+      );
     } else {
       events.add(const RunCompleted());
     }
@@ -273,10 +276,12 @@ List<ChatEvent> _parseCodexEvent(Map<String, dynamic> json) {
     final events = <ChatEvent>[];
     final usage = json['usage'];
     if (usage is Map<String, dynamic>) {
-      events.add(UsageUpdated(
-        inputTokens: _asInt(usage['input_tokens']),
-        outputTokens: _asInt(usage['output_tokens']),
-      ));
+      events.add(
+        UsageUpdated(
+          inputTokens: _asInt(usage['input_tokens']),
+          outputTokens: _asInt(usage['output_tokens']),
+        ),
+      );
     }
     events.add(const RunCompleted());
     return events;
@@ -297,7 +302,9 @@ List<ChatEvent> _parseCodexEvent(Map<String, dynamic> json) {
   if (type == 'error') {
     final message = json['message'];
     return [
-      RunFailed(message is String && message.isNotEmpty ? message : 'Codex error'),
+      RunFailed(
+        message is String && message.isNotEmpty ? message : 'Codex error',
+      ),
     ];
   }
 
@@ -322,9 +329,11 @@ List<ChatEvent> _parseDroidEvent(Map<String, dynamic> json) {
         json['is_error'] == true || (subtype is String && subtype != 'success');
     final result = json['result'];
     if (failed) {
-      events.add(RunFailed(
-        result is String && result.isNotEmpty ? result : 'Droid run failed',
-      ));
+      events.add(
+        RunFailed(
+          result is String && result.isNotEmpty ? result : 'Droid run failed',
+        ),
+      );
     } else {
       events.add(const RunCompleted());
     }
@@ -409,11 +418,13 @@ List<ChatEvent> _parseVibeEvent(Map<String, dynamic> json) {
         if (s is String) summary = s;
       }
     }
-    events.add(ToolCallStarted(
-      title is String && title.isNotEmpty
-          ? title
-          : (summary.isNotEmpty ? summary : 'tool'),
-    ));
+    events.add(
+      ToolCallStarted(
+        title is String && title.isNotEmpty
+            ? title
+            : (summary.isNotEmpty ? summary : 'tool'),
+      ),
+    );
     return events;
   }
 

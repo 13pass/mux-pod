@@ -46,6 +46,10 @@ class RemoteUiState {
   /// the console when no agent is found so a screenshot explains itself.
   final String? detectDetail;
 
+  /// Every agent detected on the server (one entry per pane running a
+  /// known agent), powering the console's agent switcher.
+  final List<DetectedAgent> detectedAgents;
+
   /// Last known agent configuration.
   final AgentConfig config;
 
@@ -71,6 +75,7 @@ class RemoteUiState {
     this.agentPanePath,
     this.agentPaneLabel,
     this.detectDetail,
+    this.detectedAgents = const [],
     this.config = const AgentConfig(),
     this.isBusy = false,
     this.error,
@@ -89,6 +94,7 @@ class RemoteUiState {
     Object? agentPanePath = _unset,
     Object? agentPaneLabel = _unset,
     Object? detectDetail = _unset,
+    List<DetectedAgent>? detectedAgents,
     AgentConfig? config,
     bool? isBusy,
     Object? error = _unset,
@@ -114,6 +120,7 @@ class RemoteUiState {
       detectDetail: detectDetail == _unset
           ? this.detectDetail
           : detectDetail as String?,
+      detectedAgents: detectedAgents ?? this.detectedAgents,
       config: config ?? this.config,
       isBusy: isBusy ?? this.isBusy,
       error: error == _unset ? this.error : error as String?,
@@ -163,9 +170,11 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   }
 
   /// Opens the agent console for one specific pane: connects to
-  /// [connectionId] if needed, resolves the agent running in [paneId]
-  /// (or falls back to the first detected agent pane when null), and
-  /// points the state at it.
+  /// [connectionId] if needed, scans EVERY pane once (one tmux call /
+  /// one herdr snapshot + one batched process-info round trip), and
+  /// points the state at the agent running in [paneId] — or the first
+  /// detected agent pane when null. The scan also fills
+  /// [RemoteUiState.detectedAgents] for the console's agent switcher.
   Future<void> openPane(String connectionId, String? paneId) async {
     await _ensureConnected(connectionId);
     if (state.connectionId != connectionId) return;
@@ -179,64 +188,85 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         return;
       }
 
-      AgentAdapter? found;
-      AgentPaneInfo? pane;
-      final detail = StringBuffer();
-      if (paneId != null) {
-        pane = await paneIO.paneInfoById(paneId);
-        found = pane == null ? null : AgentRegistry.detect(pane.command);
-        detail.write(
-          'pane $paneId: '
-          '${pane == null ? "not in snapshot" : (pane.command ?? "no foreground process reported")}',
-        );
-      }
-      if (found == null) {
-        // Fall back to the first pane running a known agent.
-        final candidates = await paneIO.listPanes();
-        var resolved = 0;
-        for (final candidate in candidates) {
-          if (candidate.command != null) resolved++;
-        }
-        detail.write(
-          ' | scan: ${candidates.length} panes, $resolved command(s) resolved',
-        );
-        for (final candidate in candidates) {
-          final adapter = AgentRegistry.detect(candidate.command);
-          if (adapter != null) {
-            found = adapter;
-            pane = candidate;
-            break;
-          }
-        }
-      }
-
+      final scan = scanPanes(await paneIO.listPanes(), paneId);
+      final target = scan.target;
       var config = const AgentConfig();
-      if (found != null && pane != null) {
-        config = await found.readConfig(
+      if (target != null) {
+        config = await target.adapter.readConfig(
           AgentContext(
             ssh: transport,
             paneIO: paneIO,
-            paneId: pane.id,
-            paneWorkingDirectory: pane.path,
+            paneId: target.pane.id,
+            paneWorkingDirectory: target.pane.path,
           ),
         );
       }
 
       state = state.copyWith(
-        agent: found,
-        agentPaneId: pane?.id,
-        agentPanePath: pane?.path,
-        agentPaneLabel: pane == null || pane.label.isEmpty ? null : pane.label,
-        detectDetail: detail.isEmpty ? null : detail.toString(),
+        agent: target?.adapter,
+        agentPaneId: target?.pane.id,
+        agentPanePath: target?.pane.path,
+        agentPaneLabel: target == null || target.pane.label.isEmpty
+            ? null
+            : target.pane.label,
+        detectedAgents: scan.agents,
+        detectDetail: scan.detail,
         config: config,
         isBusy: false,
-        error: found == null && paneId != null
+        error: target == null && paneId != null
             ? 'No AI agent detected in pane $paneId'
             : null,
       );
     } on Object catch (e) {
       state = state.copyWith(isBusy: false, error: '$e');
     }
+  }
+
+  /// Resolves [panes] into every detected agent, the target for
+  /// [paneId] (first detected agent when null), and the detection detail
+  /// line for the console status. Pure; unit-tested directly.
+  static ({List<DetectedAgent> agents, DetectedAgent? target, String detail})
+  scanPanes(List<AgentPaneInfo> panes, String? paneId) {
+    final agents = <DetectedAgent>[];
+    for (final pane in panes) {
+      final adapter = AgentRegistry.detect(pane.command);
+      if (adapter != null) {
+        agents.add(DetectedAgent(pane: pane, adapter: adapter));
+      }
+    }
+    DetectedAgent? target;
+    if (paneId != null) {
+      for (final agent in agents) {
+        if (agent.pane.id == paneId) {
+          target = agent;
+          break;
+        }
+      }
+    } else {
+      target = agents.isEmpty ? null : agents.first;
+    }
+    var resolved = 0;
+    for (final pane in panes) {
+      if (pane.command != null) resolved++;
+    }
+    final detail = StringBuffer();
+    if (paneId != null) {
+      AgentPaneInfo? focused;
+      for (final pane in panes) {
+        if (pane.id == paneId) {
+          focused = pane;
+          break;
+        }
+      }
+      detail.write(
+        'pane $paneId: '
+        '${focused == null ? "not in snapshot" : (focused.command ?? "no foreground process reported")}',
+      );
+    }
+    detail.write(
+      ' | scan: ${panes.length} panes, $resolved command(s) resolved',
+    );
+    return (agents: agents, target: target, detail: detail.toString());
   }
 
   /// Detects which of [paneIds] run a known AI agent. Used by the
@@ -456,67 +486,21 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     state = const RemoteUiState();
   }
 
-  /// Re-scans the server's panes for a known agent and re-reads its
-  /// configuration.
+  /// Re-scans the server's panes and re-reads the configuration of the
+  /// currently selected agent (first detected agent when none is
+  /// selected). Also refreshes the full agent list.
   ///
   /// Detection is backend-aware: on tmux servers it runs
   /// `tmux list-panes -a` (via the shared [tmuxFacade]); on herdr servers
-  /// it uses `herdr api snapshot` + `herdr pane process-info`, because
-  /// herdr's panes are its own terminal emulators, invisible to tmux. Each
-  /// pane's foreground process is matched against the registered adapters.
+  /// it uses `herdr api snapshot` + one batched `herdr pane process-info`
+  /// loop, because herdr's panes are its own terminal emulators,
+  /// invisible to tmux. Each pane's foreground process is matched against
+  /// the registered adapters, and herdr's own agent report is merged in
+  /// (it identifies agents whose foreground process is a wrapper).
   Future<void> refresh() async {
-    final client = _client;
-    final paneIO = _paneIO;
-    final transport = _transport;
-    if (client == null ||
-        paneIO == null ||
-        transport == null ||
-        !client.isConnected) {
-      return;
-    }
-
-    state = state.copyWith(isBusy: true, error: null);
-    try {
-      final panes = await paneIO.listPanes();
-
-      AgentAdapter? found;
-      String? paneId;
-      String? panePath;
-      String? paneLabel;
-      for (final pane in panes) {
-        final adapter = AgentRegistry.detect(pane.command);
-        if (adapter != null) {
-          found = adapter;
-          paneId = pane.id;
-          panePath = pane.path;
-          if (pane.label.isNotEmpty) paneLabel = pane.label;
-          break;
-        }
-      }
-
-      var config = const AgentConfig();
-      if (found != null) {
-        config = await found.readConfig(
-          AgentContext(
-            ssh: transport,
-            paneIO: paneIO,
-            paneId: paneId!,
-            paneWorkingDirectory: panePath,
-          ),
-        );
-      }
-
-      state = state.copyWith(
-        agent: found,
-        agentPaneId: paneId,
-        agentPanePath: panePath,
-        agentPaneLabel: paneLabel,
-        config: config,
-        isBusy: false,
-      );
-    } on Object catch (e) {
-      state = state.copyWith(isBusy: false, error: '$e');
-    }
+    final connectionId = state.connectionId;
+    if (connectionId == null) return;
+    await openPane(connectionId, state.agentPaneId);
   }
 
   /// Applies a model switch to the detected live-pane agent.

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/remote_ui_provider.dart';
 import '../../services/agent/agent_adapter.dart';
 import '../../services/agent/agent_types.dart';
+import '../../services/agent/pane_io.dart';
 import '../../theme/design_colors.dart';
 import 'remote_ui_model_intelligence_sheet.dart';
 import 'remote_ui_permission_sheet.dart';
@@ -145,7 +146,7 @@ class _AgentPaneConsoleScreenState
                   .read(remoteUiProvider.notifier)
                   .openPane(
                     widget.connectionId,
-                    widget.paneId ?? remote.agentPaneId,
+                    remote.agentPaneId ?? widget.paneId,
                   ),
             ),
           ),
@@ -154,14 +155,63 @@ class _AgentPaneConsoleScreenState
       body: SafeArea(
         child: Column(
           children: [
+            _buildSwitcher(remote),
             Expanded(
-              child: _opening || remote.isConnecting || remote.isBusy
+              child:
+                  _opening ||
+                      remote.isConnecting ||
+                      (remote.isBusy && remote.agent == null)
                   ? _buildLoading(remote)
-                  : _buildStatus(context, remote, textMuted),
+                  : Column(
+                      children: [
+                        // A pane switch or refresh keeps the current
+                        // console visible with a thin progress bar
+                        // instead of flashing a full-screen loader.
+                        if (remote.isBusy)
+                          const LinearProgressIndicator(minHeight: 2),
+                        Expanded(
+                          child: _buildStatus(context, remote, textMuted),
+                        ),
+                      ],
+                    ),
             ),
             if (agent != null) _buildComposer(context, remote, agent, border),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Horizontal agent switcher: one chip per detected agent, labeled
+  /// with its workspace / tab / pane names. Tapping a chip points the
+  /// console at that pane in place (no route change). Hidden when there
+  /// is nothing to switch to.
+  Widget _buildSwitcher(RemoteUiState remote) {
+    final agents = remote.detectedAgents;
+    if (agents.isEmpty || (agents.length == 1 && remote.agent != null)) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+        itemCount: agents.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, index) {
+          final detected = agents[index];
+          return _AgentChip(
+            key: Key('agent_console.agent_chip_${detected.pane.id}'),
+            detected: detected,
+            active: detected.pane.id == remote.agentPaneId,
+            enabled: !remote.isBusy,
+            onTap: () => unawaited(
+              ref
+                  .read(remoteUiProvider.notifier)
+                  .openPane(widget.connectionId, detected.pane.id),
+            ),
+          );
+        },
       ),
     );
   }
@@ -285,7 +335,8 @@ class _AgentPaneConsoleScreenState
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Live pane ${remote.agentPaneId ?? '-'}'
+                  'Live in '
+                  '${(remote.agentPaneLabel != null && remote.agentPaneLabel!.isNotEmpty) ? remote.agentPaneLabel! : (widget.paneTitle ?? 'pane ${remote.agentPaneId ?? '-'}')}'
                   '${remote.agentPanePath != null ? ' · ${remote.agentPanePath}' : ''}',
                   style: Theme.of(
                     context,
@@ -424,6 +475,77 @@ class _AgentPaneConsoleScreenState
     if (text.trim().isEmpty) return;
     unawaited(ref.read(remoteUiProvider.notifier).sendMessage(text));
     _composerController.clear();
+  }
+}
+
+class _AgentChip extends StatelessWidget {
+  const _AgentChip({
+    super.key,
+    required this.detected,
+    required this.active,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final DetectedAgent detected;
+  final bool active;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final border = isDark ? DesignColors.borderDark : DesignColors.borderLight;
+    final label = detected.pane.label.isNotEmpty
+        ? detected.pane.label
+        : 'Pane ${detected.pane.id}';
+    final activeBg = theme.colorScheme.primary.withValues(alpha: 0.14);
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: active ? theme.colorScheme.primary : border,
+            width: active ? 1.4 : 1,
+          ),
+          color: active ? activeBg : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.smart_toy_outlined,
+              size: 13,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 5),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 180),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark
+                      ? DesignColors.textPrimary
+                      : DesignColors.textPrimaryLight,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              detected.adapter.kind.displayName,
+              style: TextStyle(fontSize: 10, color: theme.hintColor),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

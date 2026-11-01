@@ -21,8 +21,9 @@ Widget _buildApp({
 }
 
 void main() {
-  testWidgets('bottom nav shows the five tabs of the stock design',
-      (tester) async {
+  testWidgets('bottom nav shows the five tabs of the stock design', (
+    tester,
+  ) async {
     var selected = -1;
     await tester.pumpWidget(
       _buildApp(currentTab: 2, onSelectTab: (i) => selected = i),

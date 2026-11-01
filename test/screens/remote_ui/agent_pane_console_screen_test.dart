@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_muxpod/providers/remote_ui_provider.dart';
 import 'package:flutter_muxpod/screens/remote_ui/agent_pane_console_screen.dart';
 import 'package:flutter_muxpod/services/agent/agent_types.dart';
+import 'package:flutter_muxpod/services/agent/claude_code_adapter.dart';
+import 'package:flutter_muxpod/services/agent/pane_io.dart';
 import 'package:flutter_muxpod/services/agent/vibe_adapter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,16 +44,17 @@ class _FixedRemoteUiNotifier extends RemoteUiNotifier {
 
 Widget _buildApp(_FixedRemoteUiNotifier remote) {
   return ProviderScope(
-    overrides: [
-      remoteUiProvider.overrideWith(() => remote),
-    ],
-    child: MaterialApp(home: AgentPaneConsoleScreen(connectionId: 'c1', paneId: 'w5:p3')),
+    overrides: [remoteUiProvider.overrideWith(() => remote)],
+    child: MaterialApp(
+      home: AgentPaneConsoleScreen(connectionId: 'c1', paneId: 'w5:p3'),
+    ),
   );
 }
 
 void main() {
-  testWidgets('shows the detected agent and sends composer text to the pane',
-      (tester) async {
+  testWidgets('shows the detected agent and sends composer text to the pane', (
+    tester,
+  ) async {
     final remote = _FixedRemoteUiNotifier(
       RemoteUiState(
         connectionId: 'c1',
@@ -93,8 +96,9 @@ void main() {
     );
   });
 
-  testWidgets('shows a hint when the pane has no detected agent',
-      (tester) async {
+  testWidgets('shows a hint when the pane has no detected agent', (
+    tester,
+  ) async {
     final remote = _FixedRemoteUiNotifier(
       RemoteUiState(connectionId: 'c1', isConnected: true),
     );
@@ -105,5 +109,71 @@ void main() {
     expect(find.textContaining('No AI agent detected'), findsOneWidget);
     // No composer without an agent.
     expect(find.byKey(const Key('agent_console.composer')), findsNothing);
+  });
+
+  testWidgets('switcher lists every detected agent and switches panes', (
+    tester,
+  ) async {
+    final remote = _FixedRemoteUiNotifier(
+      RemoteUiState(
+        connectionId: 'c1',
+        isConnected: true,
+        agent: VibeAdapter(),
+        agentPaneId: 'w5:p3',
+        agentPaneLabel: 'vibe · muxpod',
+        detectedAgents: [
+          DetectedAgent(
+            pane: const AgentPaneInfo(
+              id: 'w5:p3',
+              command: 'vibe',
+              workspace: 'vibe',
+              tab: 'muxpod',
+            ),
+            adapter: VibeAdapter(),
+          ),
+          DetectedAgent(
+            pane: const AgentPaneInfo(
+              id: 'w7:p2',
+              command: 'claude',
+              workspace: 'Dintel',
+              tab: 'langfuse',
+            ),
+            adapter: ClaudeCodeAdapter(),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+
+    // Chips labeled with workspace/tab names, not raw pane ids.
+    expect(find.text('vibe · muxpod'), findsWidgets);
+    expect(find.text('Dintel · langfuse'), findsOneWidget);
+    expect(find.textContaining('w7:p2'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('agent_console.agent_chip_w7:p2')));
+    await tester.pumpAndSettle();
+
+    expect(remote.calls, contains('openPane(c1, w7:p2)'));
+  });
+
+  testWidgets('switcher stays hidden for a single active agent', (
+    tester,
+  ) async {
+    final remote = _FixedRemoteUiNotifier(
+      RemoteUiState(
+        connectionId: 'c1',
+        isConnected: true,
+        agent: VibeAdapter(),
+        agentPaneId: 'w5:p3',
+      ),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('agent_console.agent_chip_w5:p3')),
+      findsNothing,
+    );
   });
 }

@@ -5,6 +5,7 @@ import '../tmux/commands/content_commands.dart';
 import '../tmux/commands/input_commands.dart';
 import '../tmux/tmux_command_executor.dart';
 import '../tmux/tmux_facade.dart';
+import 'agent_adapter.dart';
 import 'agent_transport.dart';
 
 /// One pane of the server's multiplexer, as seen by agent detection.
@@ -47,6 +48,16 @@ class AgentPaneInfo {
     ];
     return parts.join(' \u00b7 ');
   }
+}
+
+/// A pane running a known agent: the pane plus the adapter matching its
+/// foreground process. The console's agent switcher shows one of these
+/// per detected agent, labeled with the pane's [AgentPaneInfo.label].
+class DetectedAgent {
+  const DetectedAgent({required this.pane, required this.adapter});
+
+  final AgentPaneInfo pane;
+  final AgentAdapter adapter;
 }
 
 /// Backend-aware pane access for agent control.
@@ -229,17 +240,20 @@ class HerdrPaneIO implements PaneIO {
     return 'herdr';
   }
 
-  /// Raw pane entries of the last snapshot (pane_id + cwd), cached for
+  /// Raw pane entries of the last snapshot, cached for
   /// [_snapshotCacheTtl] so a burst of lookups (badges + one console open)
-  /// costs ONE snapshot round trip instead of one per lookup.
+  /// costs ONE snapshot round trip instead of one per lookup. The
+  /// [agentNames] map carries herdr's own agent report per pane id.
   static const _snapshotCacheTtl = Duration(seconds: 5);
-  ({List<AgentPaneInfo> panes, DateTime at})? _snapshotCache;
+  ({List<AgentPaneInfo> panes, Map<String, String> agentNames, DateTime at})?
+  _snapshotCache;
 
-  Future<List<AgentPaneInfo>> _snapshotPanes() async {
+  Future<({List<AgentPaneInfo> panes, Map<String, String> agentNames})>
+  _snapshotPanes() async {
     final cached = _snapshotCache;
     if (cached != null &&
         DateTime.now().difference(cached.at) < _snapshotCacheTtl) {
-      return cached.panes;
+      return (panes: cached.panes, agentNames: cached.agentNames);
     }
     final bin = await _bin();
     final snapshot = await _transport.execWithExitCode(
@@ -314,8 +328,29 @@ class HerdrPaneIO implements PaneIO {
         );
       }
     }
-    _snapshotCache = (panes: panes, at: DateTime.now());
-    return panes;
+    // herdr's own agent report: pane id -> agent name ("claude", "pi").
+    // herdr tracks these sessions itself, so the report identifies
+    // agents whose foreground process is a wrapper (claude panes run
+    // `clawpatrol`).
+    final agentNames = <String, String>{};
+    if (snapshotObj is Map<String, dynamic>) {
+      final agents = snapshotObj['agents'];
+      if (agents is List) {
+        for (final a in agents) {
+          if (a is! Map<String, dynamic>) continue;
+          final agentPaneId = a['pane_id'];
+          final agentName = a['agent'];
+          if (agentPaneId is String &&
+              agentPaneId.isNotEmpty &&
+              agentName is String &&
+              agentName.isNotEmpty) {
+            agentNames[agentPaneId] = agentName.trim().toLowerCase();
+          }
+        }
+      }
+    }
+    _snapshotCache = (panes: panes, agentNames: agentNames, at: DateTime.now());
+    return (panes: panes, agentNames: agentNames);
   }
 
   Future<AgentPaneInfo> _withCommand(AgentPaneInfo pane) async {
@@ -337,19 +372,129 @@ class HerdrPaneIO implements PaneIO {
     );
   }
 
+  /// Resolves the foreground process of every [ids] pane in ONE exec: a
+  /// server-side shell loop framed with `<<<MUXPOD:<pane>>>` markers.
+  /// One round trip for N panes instead of N round trips (the per-pane
+  /// path was slow and flaky over the shared terminal connection).
+  /// Returns null when the batch could not be parsed, so callers can
+  /// fall back to per-pane probes.
+  Future<Map<String, String>?> _batchForegroundCommands(
+    List<String> ids,
+  ) async {
+    if (ids.isEmpty) return const {};
+    // Pane ids are herdr-generated (`w5:p3`); only embed clearly safe
+    // ids in the loop, anything else is skipped (command stays null).
+    final safe = ids
+        .where((id) => RegExp(r'^[A-Za-z0-9:_-]+$').hasMatch(id))
+        .toList();
+    if (safe.isEmpty) return const {};
+    final bin = await _bin();
+    final out = await _transport.execWithExitCode(
+      'for p in ${safe.join(' ')}; do '
+      'printf \'\\n<<<MUXPOD:%s>>>\' "\$p"; '
+      '$bin pane process-info --pane "\$p" 2>/dev/null; '
+      'done; true',
+      timeout: _execTimeout,
+    );
+    if (out.exitCode != 0) return null;
+    final marker = RegExp(r'<<<MUXPOD:([^>]+)>>>');
+    final matches = marker.allMatches(out.stdout).toList();
+    if (matches.isEmpty) return null;
+    final commands = <String, String>{};
+    for (var i = 0; i < matches.length; i++) {
+      final paneId = matches[i].group(1)!.trim();
+      final start = matches[i].end;
+      final end = i + 1 < matches.length
+          ? matches[i + 1].start
+          : out.stdout.length;
+      final body = out.stdout.substring(start, end).trim();
+      if (body.isEmpty) continue; // pane closed or herdr could not report it
+      try {
+        final decoded = jsonDecode(body);
+        final result = decoded is Map<String, dynamic>
+            ? resultOf(decoded)
+            : null;
+        final processInfo = result is Map<String, dynamic>
+            ? result['process_info']
+            : null;
+        final processes = processInfo is Map<String, dynamic>
+            ? processInfo['foreground_processes']
+            : null;
+        if (processes is! List || processes.isEmpty) continue;
+        final first = processes.first;
+        if (first is! Map<String, dynamic>) continue;
+        final name = first['name'];
+        if (name is! String || name.isEmpty) continue;
+        // Same normalization as [currentCommand]: herdr reports display
+        // names like "Vibe CLI"; detection matches the first word
+        // lowercased ("vibe").
+        commands[paneId] = name.split(' ').first.toLowerCase();
+      } on Object {
+        // Unparseable chunk: leave this pane unresolved.
+      }
+    }
+    return commands;
+  }
+
   @override
   Future<List<AgentPaneInfo>> listPanes() async {
+    final snapshot = await _snapshotPanes();
+    // Panes herdr itself reports an agent for need no process probe.
+    final probeIds = <String>[
+      for (final pane in snapshot.panes)
+        if (!snapshot.agentNames.containsKey(pane.id)) pane.id,
+    ];
+    final probed = await _batchForegroundCommands(probeIds);
+    if (probed == null) {
+      // Batch failed (old herdr, odd shell): per-pane probes, bounded.
+      final result = <AgentPaneInfo>[];
+      for (final pane in snapshot.panes) {
+        final reported = snapshot.agentNames[pane.id];
+        result.add(
+          reported != null
+              ? _withReportedAgent(pane, reported)
+              : await _withCommand(pane),
+        );
+      }
+      return result;
+    }
     return [
-      for (final pane in await _snapshotPanes()) await _withCommand(pane),
+      for (final pane in snapshot.panes)
+        AgentPaneInfo(
+          id: pane.id,
+          // herdr's own report wins over the foreground process name.
+          command: snapshot.agentNames[pane.id] ?? probed[pane.id],
+          path: pane.path,
+          workspace: pane.workspace,
+          tab: pane.tab,
+          title: pane.title,
+        ),
     ];
   }
+
+  /// Pane copy carrying herdr's own reported agent as its command (no
+  /// process-info probe needed: herdr tracks these sessions itself).
+  AgentPaneInfo _withReportedAgent(AgentPaneInfo pane, String agent) =>
+      AgentPaneInfo(
+        id: pane.id,
+        command: agent,
+        path: pane.path,
+        workspace: pane.workspace,
+        tab: pane.tab,
+        title: pane.title,
+      );
 
   @override
   Future<AgentPaneInfo?> paneInfoById(String paneId) async {
     // Resolve a single pane WITHOUT the per-pane process-info scan of
-    // [listPanes]: snapshot (cached) + one process-info for the target.
-    for (final pane in await _snapshotPanes()) {
-      if (pane.id == paneId) return await _withCommand(pane);
+    // [listPanes]: snapshot (cached) + one process-info for the target —
+    // or none at all when herdr itself reports the pane's agent.
+    final snapshot = await _snapshotPanes();
+    for (final pane in snapshot.panes) {
+      if (pane.id != paneId) continue;
+      final reported = snapshot.agentNames[paneId];
+      if (reported != null) return _withReportedAgent(pane, reported);
+      return _withCommand(pane);
     }
     return null;
   }

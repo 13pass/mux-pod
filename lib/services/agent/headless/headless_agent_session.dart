@@ -36,14 +36,14 @@ class HeadlessAgentSession {
     bool planMode = false,
     String? workingDirectory,
     String? resumeSessionId,
-  })  : _ssh = ssh,
-        _kind = kind,
-        _model = model,
-        _intelligence = intelligence,
-        _permission = permission,
-        _planMode = planMode,
-        _workingDirectory = workingDirectory,
-        _sessionId = resumeSessionId;
+  }) : _ssh = ssh,
+       _kind = kind,
+       _model = model,
+       _intelligence = intelligence,
+       _permission = permission,
+       _planMode = planMode,
+       _workingDirectory = workingDirectory,
+       _sessionId = resumeSessionId;
 
   final AgentTransport _ssh;
   final AgentKind _kind;

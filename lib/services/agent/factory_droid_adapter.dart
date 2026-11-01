@@ -41,24 +41,24 @@ class FactoryDroidAdapter extends AgentAdapter {
 
   @override
   AgentCapabilities get capabilities => const AgentCapabilities(
-        // Model IDs are user/org-specific (BYOK, Factory-Managed
-        // Inference); free-text entry.
-        intelligenceLevels: [
-          UnifiedIntelligence.low,
-          UnifiedIntelligence.medium,
-          UnifiedIntelligence.high,
-          UnifiedIntelligence.extraHigh,
-          UnifiedIntelligence.max,
-        ],
-        permissionLevels: [
-          UnifiedPermission.readOnly,
-          UnifiedPermission.defaultPermissions,
-          UnifiedPermission.autoReview,
-          UnifiedPermission.fullAccess,
-          UnifiedPermission.custom,
-        ],
-        supportsPlanMode: true,
-      );
+    // Model IDs are user/org-specific (BYOK, Factory-Managed
+    // Inference); free-text entry.
+    intelligenceLevels: [
+      UnifiedIntelligence.low,
+      UnifiedIntelligence.medium,
+      UnifiedIntelligence.high,
+      UnifiedIntelligence.extraHigh,
+      UnifiedIntelligence.max,
+    ],
+    permissionLevels: [
+      UnifiedPermission.readOnly,
+      UnifiedPermission.defaultPermissions,
+      UnifiedPermission.autoReview,
+      UnifiedPermission.fullAccess,
+      UnifiedPermission.custom,
+    ],
+    supportsPlanMode: true,
+  );
 
   // ===== Pure mappings (unit-tested directly) =====
 
@@ -74,8 +74,8 @@ class FactoryDroidAdapter extends AgentAdapter {
       UnifiedIntelligence.extraHigh => 'xhigh',
       UnifiedIntelligence.max => 'max',
       UnifiedIntelligence.ultra => throw ArgumentError(
-          'Droid does not support reasoning effort "${level.name}"',
-        ),
+        'Droid does not support reasoning effort "${level.name}"',
+      ),
     };
   }
 
@@ -145,10 +145,12 @@ class FactoryDroidAdapter extends AgentAdapter {
     );
     return AgentConfig(
       model: model is String ? model : null,
-      intelligence:
-          effort is String ? intelligenceForReasoningEffort(effort) : null,
-      permission:
-          autonomy is String ? permissionForAutonomyLevel(autonomy) : null,
+      intelligence: effort is String
+          ? intelligenceForReasoningEffort(effort)
+          : null,
+      permission: autonomy is String
+          ? permissionForAutonomyLevel(autonomy)
+          : null,
       planModeActive: interactionMode == 'spec',
     );
   }
@@ -212,7 +214,7 @@ class FactoryDroidAdapter extends AgentAdapter {
   ) async {
     final current =
         await AgentConfigService.readRemoteFile(context.ssh, settingsPath) ??
-            '';
+        '';
     final updated = AgentConfigService.jsonSetDotted(current, dottedKey, value);
     await AgentConfigService.writeRemoteFileAtomic(
       context.ssh,

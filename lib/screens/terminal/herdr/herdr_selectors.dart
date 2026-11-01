@@ -167,10 +167,9 @@ class HerdrSelectorPresenter {
           try {
             agentPanes = await _host.ref
                 .read(remoteUiProvider.notifier)
-                .agentsForPanes(
-                  connectionId,
-                  [for (final p in window.panes) p.id],
-                );
+                .agentsForPanes(connectionId, [
+                  for (final p in window.panes) p.id,
+                ]);
           } on Object {
             agentPanes = const {};
           }
@@ -211,8 +210,8 @@ class HerdrSelectorPresenter {
                 title: herdrPaneLabel(pane, l10n),
                 isActive: pane.id == _host.paneId,
                 isAgent: agentPanes.containsKey(pane.id),
-                onAgentChat: connectionId != null &&
-                        agentPanes.containsKey(pane.id)
+                onAgentChat:
+                    connectionId != null && agentPanes.containsKey(pane.id)
                     ? () {
                         Navigator.pop(_host.context);
                         if (!_host.isMounted || _host.isDisposed) return;
