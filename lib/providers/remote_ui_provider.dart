@@ -84,8 +84,9 @@ class RemoteUiState {
       isConnecting: isConnecting ?? this.isConnecting,
       isConnected: isConnected ?? this.isConnected,
       agent: agent == _unset ? this.agent : agent as AgentAdapter?,
-      agentPaneId:
-          agentPaneId == _unset ? this.agentPaneId : agentPaneId as String?,
+      agentPaneId: agentPaneId == _unset
+          ? this.agentPaneId
+          : agentPaneId as String?,
       agentPanePath: agentPanePath == _unset
           ? this.agentPanePath
           : agentPanePath as String?,
@@ -226,7 +227,9 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         state.connectionId == connectionId) {
       return;
     }
-    final connection = ref.read(connectionsProvider.notifier).getById(connectionId);
+    final connection = ref
+        .read(connectionsProvider.notifier)
+        .getById(connectionId);
     if (connection == null) {
       // Unknown id: do not leave isConnecting stuck on (infinite spinner).
       state = state.copyWith(isConnecting: false, error: 'Unknown connection');
@@ -247,12 +250,13 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     if (previous != null) await previous.disconnect();
 
     final client = SshClient();
+    final isHerdr = connection.multiplexer.backend == BackendType.herdr;
     try {
-      final isHerdr = connection.multiplexer.backend == BackendType.herdr;
       final options = await buildConnectionConnectOptions(
         connection,
-        settingsKeepAliveTimeoutSeconds:
-            ref.read(settingsProvider).keepAliveTimeoutSeconds,
+        settingsKeepAliveTimeoutSeconds: ref
+            .read(settingsProvider)
+            .keepAliveTimeoutSeconds,
         // For herdr connections the multiplexer executablePath points at the
         // herdr binary, not tmux; the Remote UI never runs tmux commands on a
         // herdr server, so drop it to keep tmux auto-detection sane.
@@ -261,12 +265,20 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
             : null,
       );
 
-      await client.connect(
-        host: connection.host,
-        port: connection.port,
-        username: connection.username,
-        options: options,
-      );
+      // The console only issues ephemeral exec commands (herdr CLI / tmux /
+      // config reads), so a lightweight connection suffices: no persistent
+      // shells, no keep-alive. A full connect also starts the polling/input
+      // shells, a step the terminal never exercises on the same server and
+      // a hang candidate on flaky mobile links.
+      await client
+          .connect(
+            host: connection.host,
+            port: connection.port,
+            username: connection.username,
+            options: options,
+            lightweight: true,
+          )
+          .timeout(const Duration(seconds: 30));
 
       _client = client;
       _transport = SshAgentTransport(client);
@@ -280,6 +292,16 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         connectionId: connectionId,
         isConnecting: false,
         isConnected: true,
+      );
+    } on TimeoutException {
+      // Never leave a half-opened connection behind: it would linger as a
+      // zombie TCP session and tripping sshd's MaxStartups blocks every
+      // later attempt with an endless spinner.
+      await client.disconnect();
+      state = state.copyWith(
+        isConnecting: false,
+        isConnected: false,
+        error: 'Connection timed out after 30s',
       );
     } on Object catch (e) {
       await client.disconnect();
@@ -316,7 +338,10 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     final client = _client;
     final paneIO = _paneIO;
     final transport = _transport;
-    if (client == null || paneIO == null || transport == null || !client.isConnected) {
+    if (client == null ||
+        paneIO == null ||
+        transport == null ||
+        !client.isConnected) {
       return;
     }
 
@@ -391,14 +416,16 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   }
 
   Future<void> _apply(
-    Future<String> Function(AgentAdapter adapter, AgentContext context)
-        action,
+    Future<String> Function(AgentAdapter adapter, AgentContext context) action,
   ) async {
     final adapter = state.agent;
     final transport = _transport;
     final paneIO = _paneIO;
     final paneId = state.agentPaneId;
-    if (adapter == null || transport == null || paneIO == null || paneId == null) {
+    if (adapter == null ||
+        transport == null ||
+        paneIO == null ||
+        paneId == null) {
       return;
     }
 
@@ -427,5 +454,6 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
 }
 
 /// Provider for the Remote UI tab.
-final remoteUiProvider =
-    NotifierProvider<RemoteUiNotifier, RemoteUiState>(RemoteUiNotifier.new);
+final remoteUiProvider = NotifierProvider<RemoteUiNotifier, RemoteUiState>(
+  RemoteUiNotifier.new,
+);
