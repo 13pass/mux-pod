@@ -22,6 +22,11 @@ class _FixedRemoteUiNotifier extends RemoteUiNotifier {
   void emit(RemoteUiState next) => state = next;
 
   @override
+  Future<void> readPaneContent({int lines = 40}) async {
+    calls.add('readPaneContent');
+  }
+
+  @override
   Future<void> openPane(String connectionId, String? paneId) async {
     calls.add('openPane($connectionId, $paneId)');
   }
@@ -268,5 +273,27 @@ void main() {
     // "Console failed to open" in the status area).
     expect(remote.calls, ['openPane(c1, w5:p3)']);
     expect(find.textContaining('Console failed to open'), findsNothing);
+  });
+
+  testWidgets('polls the pane content while the console is open', (
+    tester,
+  ) async {
+    final remote = _FixedRemoteUiNotifier(
+      RemoteUiState(
+        connectionId: 'c1',
+        isConnected: true,
+        agent: VibeAdapter(),
+        agentPaneId: 'w5:p3',
+      ),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+
+    int contentReads() =>
+        remote.calls.where((c) => c == 'readPaneContent').length;
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 5));
+    expect(contentReads(), 2);
   });
 }

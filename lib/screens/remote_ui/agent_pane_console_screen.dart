@@ -48,6 +48,11 @@ class _AgentPaneConsoleScreenState
 
   final _composerController = TextEditingController();
   final _contentScrollController = ScrollController();
+
+  /// Polls the pane's recent output while the console is open: the
+  /// transcript must behave like a live chat view, not a snapshot
+  /// taken at open time.
+  Timer? _contentPollTimer;
   bool _opening = true;
 
   @override
@@ -61,6 +66,15 @@ class _AgentPaneConsoleScreenState
     // initial open on the same code path.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_open());
+    });
+    // Timer callbacks run in the event phase, so the poll's state
+    // writes are safe. readPaneContent no-ops without a selected agent
+    // pane; ticks during a scan/switch are skipped by isBusy.
+    _contentPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      final remote = ref.read(remoteUiProvider);
+      if (remote.isBusy || remote.agent == null) return;
+      unawaited(ref.read(remoteUiProvider.notifier).readPaneContent());
     });
   }
 
@@ -93,6 +107,7 @@ class _AgentPaneConsoleScreenState
 
   @override
   void dispose() {
+    _contentPollTimer?.cancel();
     _composerController.dispose();
     _contentScrollController.dispose();
     super.dispose();
