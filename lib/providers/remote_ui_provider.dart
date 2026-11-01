@@ -14,6 +14,7 @@ import '../services/tmux/tmux_facade.dart';
 import 'connection_connect_options.dart';
 import 'connection_provider.dart';
 import 'settings_provider.dart';
+import 'ssh_provider.dart';
 
 /// State for the Remote UI tab: which server is connected, which agent
 /// (if any) was detected in its tmux panes, and the agent's last known
@@ -113,13 +114,20 @@ class RemoteUiState {
 /// operations never block terminal input.
 class RemoteUiNotifier extends Notifier<RemoteUiState> {
   SshClient? _client;
+
+  /// Whether this provider owns `_client` (dedicated connection). When the
+  /// terminal's live connection is reused, [_client] stays null and
+  /// disconnects must leave that connection alone.
+  bool _ownsClient = false;
   PaneIO? _paneIO;
   AgentTransport? _transport;
 
   @override
   RemoteUiState build() {
     ref.onDispose(() {
-      unawaited(_client?.disconnect());
+      if (_ownsClient) {
+        unawaited(_client?.disconnect());
+      }
     });
     return const RemoteUiState();
   }
@@ -226,6 +234,26 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     return result;
   }
 
+  /// Clears the previous connection state. When [ownsClient] is true a
+  /// previously OWNED dedicated connection is disposed (bounded); a reused
+  /// terminal connection is never touched.
+  void _reset({required bool ownsClient}) {
+    final previous = _client;
+    _client = null;
+    _paneIO = null;
+    _transport = null;
+    _ownsClient = ownsClient;
+    if (previous != null && !ownsClient) {
+      // previous was owned; new path reuses -> dispose it (bounded).
+      unawaited(
+        previous.disconnect().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {},
+        ),
+      );
+    }
+  }
+
   /// Connects to [connectionId] (reusing the connection when already
   /// active) and installs the backend-aware [PaneIO].
   Future<void> _ensureConnected(String connectionId) async {
@@ -243,6 +271,35 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       return;
     }
 
+    // Preferred path: REUSE the terminal's live SSH connection. The console
+    // is always opened from the terminal, that connection is already
+    // authenticated, and opening a second connection has proven fragile on
+    // mobile networks (new SSH handshakes time out while established flows
+    // keep working). The console only issues short ephemeral exec commands,
+    // which are safe over the shared connection.
+    final ssh = ref.read(sshProvider.notifier);
+    final live = ssh.liveClient;
+    if (live != null &&
+        live.isConnected &&
+        ssh.liveConnectionId == connectionId) {
+      _reset(ownsClient: false);
+      _transport = SshAgentTransport(live);
+      _paneIO = connection.multiplexer.backend == BackendType.herdr
+          ? HerdrPaneIO(
+              _transport!,
+              herdrBin: connection.multiplexer.executablePath ?? 'herdr',
+            )
+          : TmuxPaneIO(live.tmuxExecutor);
+      state = state.copyWith(
+        connectionId: connectionId,
+        isConnecting: false,
+        isConnected: true,
+        phase: null,
+        error: null,
+        notice: null,
+      );
+      return;
+    }
     state = state.copyWith(
       isConnecting: true,
       isConnected: false,
@@ -251,20 +308,23 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       phase: 'resetting-connection',
     );
 
-    final previous = _client;
-    _client = null;
-    _paneIO = null;
-    _transport = null;
-    if (previous != null) {
+    if (_ownsClient) {
       // Closing a previous (possibly half-dead) console connection must
       // never block a new attempt: a wedged close here produced the
       // endless 'Connecting...' spinner. Best-effort, bounded.
-      try {
-        await previous.disconnect().timeout(const Duration(seconds: 5));
-      } on Object {
-        // Leave the old socket to the OS; proceed regardless.
+      final previous = _client;
+      if (previous != null) {
+        try {
+          await previous.disconnect().timeout(const Duration(seconds: 5));
+        } on Object {
+          // Leave the old socket to the OS; proceed regardless.
+        }
       }
     }
+    _client = null;
+    _paneIO = null;
+    _transport = null;
+    _ownsClient = true;
     state = state.copyWith(phase: 'reading-credentials');
 
     final client = SshClient();
@@ -355,10 +415,11 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
 
   /// Disconnects from the current server and clears detection state.
   Future<void> disconnect() async {
-    final client = _client;
+    final client = _ownsClient ? _client : null;
     _client = null;
     _paneIO = null;
     _transport = null;
+    _ownsClient = false;
     if (client != null) await client.disconnect();
     state = const RemoteUiState();
   }

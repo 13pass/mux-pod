@@ -99,6 +99,16 @@ class SshNotifier extends Notifier<SshState> {
     SshConnectOptions options,
   ) => _orchestrator.connectWithoutShell(connection, options);
 
+  /// ターミナルが現在保持しているライブ SSH クライアント（未接続なら null）。
+  ///
+  /// Agent console 等、追加の SSH 接続を開かずに既存接続を流用したい
+  /// 呼び出し側のための読み取り専用アクセサ。クライアントの所有権は
+  /// 引き続き orchestrator が持つ（disconnect しないこと）。
+  SshClient? get liveClient => _orchestrator.client;
+
+  /// ターミナルのライブ接続が紐づく connectionId（未接続なら null）。
+  String? get liveConnectionId => _orchestrator.lastConnection?.id;
+
   /// 再接続を試みる
   ///
   /// 自動再接続用。指数バックオフで無制限に試行する。
