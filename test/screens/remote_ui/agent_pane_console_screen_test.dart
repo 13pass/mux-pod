@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_muxpod/providers/remote_ui_provider.dart';
 import 'package:flutter_muxpod/screens/remote_ui/agent_pane_console_screen.dart';
 import 'package:flutter_muxpod/services/agent/agent_types.dart';
@@ -45,7 +46,30 @@ class _FixedRemoteUiNotifier extends RemoteUiNotifier {
   void clearMessages() {}
 }
 
-Widget _buildApp(_FixedRemoteUiNotifier remote) {
+/// Guards the build-phase contract: openPane's synchronous prefix writes
+/// provider state, which Riverpod forbids while the widget tree is
+/// building ("Tried to modify a provider while the widget tree was
+/// building"). This notifier fails the test if that regresses.
+class _BuildPhaseRemoteUiNotifier extends RemoteUiNotifier {
+  _BuildPhaseRemoteUiNotifier(this.initial);
+
+  final RemoteUiState initial;
+  final List<String> calls = [];
+
+  @override
+  RemoteUiState build() => initial;
+
+  @override
+  Future<void> openPane(String connectionId, String? paneId) async {
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks) {
+      throw StateError('openPane ran during the build phase: $phase');
+    }
+    calls.add('openPane($connectionId, $paneId)');
+  }
+}
+
+Widget _buildApp(RemoteUiNotifier remote) {
   return ProviderScope(
     overrides: [remoteUiProvider.overrideWith(() => remote)],
     child: MaterialApp(
@@ -201,5 +225,21 @@ void main() {
       find.byKey(const Key('agent_console.status_message')),
     );
     expect(status.data, 'Command execution timed out');
+  });
+
+  testWidgets('never calls openPane while the frame is building', (
+    tester,
+  ) async {
+    final remote = _BuildPhaseRemoteUiNotifier(
+      RemoteUiState(connectionId: 'c1', isConnected: true),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+
+    // The initial open ran once, after the frame (a build-phase call
+    // would have thrown inside the notifier and surfaced as
+    // "Console failed to open" in the status area).
+    expect(remote.calls, ['openPane(c1, w5:p3)']);
+    expect(find.textContaining('Console failed to open'), findsNothing);
   });
 }

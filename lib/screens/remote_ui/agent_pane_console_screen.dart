@@ -58,7 +58,15 @@ class _AgentPaneConsoleScreenState
   @override
   void initState() {
     super.initState();
-    unawaited(_open());
+    // openPane must not start during the build phase: its synchronous
+    // prefix writes provider state, and Riverpod forbids provider
+    // modification while the tree is building ("Tried to modify a
+    // provider while the widget tree was building"). Deferring one
+    // frame also keeps the retry/switch taps (event phase) and the
+    // initial open on the same code path.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_open());
+    });
   }
 
   /// Error shown when openPane never completes even though every step is
