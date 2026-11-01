@@ -50,6 +50,10 @@ class RemoteUiState {
   /// Last confirmation message from an apply operation.
   final String? notice;
 
+  /// Fine-grained connect phase for the console loading text
+  /// ('reading-credentials' | 'connecting' | null).
+  final String? phase;
+
   const RemoteUiState({
     this.connectionId,
     this.isConnecting = false,
@@ -61,6 +65,7 @@ class RemoteUiState {
     this.isBusy = false,
     this.error,
     this.notice,
+    this.phase,
   });
 
   static const _unset = Object();
@@ -76,6 +81,7 @@ class RemoteUiState {
     bool? isBusy,
     Object? error = _unset,
     Object? notice = _unset,
+    String? phase,
   }) {
     return RemoteUiState(
       connectionId: connectionId == _unset
@@ -94,6 +100,7 @@ class RemoteUiState {
       isBusy: isBusy ?? this.isBusy,
       error: error == _unset ? this.error : error as String?,
       notice: notice == _unset ? this.notice : notice as String?,
+      phase: phase ?? (connectionId == _unset ? this.phase : null),
     );
   }
 }
@@ -241,6 +248,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       isConnected: false,
       error: null,
       notice: null,
+      phase: 'reading-credentials',
     );
 
     final previous = _client;
@@ -251,8 +259,11 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
 
     final client = SshClient();
     final isHerdr = connection.multiplexer.backend == BackendType.herdr;
+    final SshConnectOptions options;
     try {
-      final options = await buildConnectionConnectOptions(
+      // Credential reads go through the Android Keystore (secure storage);
+      // a wedged keystore read must surface as an error, not a hang.
+      options = await buildConnectionConnectOptions(
         connection,
         settingsKeepAliveTimeoutSeconds: ref
             .read(settingsProvider)
@@ -263,7 +274,20 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         multiplexerOverride: isHerdr
             ? const MultiplexerConfig(backend: BackendType.herdr)
             : null,
+      ).timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      state = state.copyWith(
+        isConnecting: false,
+        isConnected: false,
+        phase: null,
+        error:
+            'Timed out reading connection credentials (secure storage). '
+            'Try re-importing the SSH key in Keys.',
       );
+      return;
+    }
+    try {
+      state = state.copyWith(phase: 'connecting');
 
       // The console only issues ephemeral exec commands (herdr CLI / tmux /
       // config reads), so a lightweight connection suffices: no persistent
@@ -292,6 +316,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         connectionId: connectionId,
         isConnecting: false,
         isConnected: true,
+        phase: null,
       );
     } on TimeoutException {
       // Never leave a half-opened connection behind: it would linger as a
@@ -301,6 +326,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       state = state.copyWith(
         isConnecting: false,
         isConnected: false,
+        phase: null,
         error: 'Connection timed out after 30s',
       );
     } on Object catch (e) {
@@ -311,6 +337,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         agent: null,
         agentPaneId: null,
         agentPanePath: null,
+        phase: null,
         error: '$e',
       );
     }

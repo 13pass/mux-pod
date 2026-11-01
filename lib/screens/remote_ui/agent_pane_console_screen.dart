@@ -151,15 +151,24 @@ class _AgentPaneConsoleScreenState
   }
 
   /// Loading area that says WHICH phase is running, so a hang is visible
+  /// Build stamp (GIT_REF dart-define) so any screenshot identifies the
+  /// exact build under test.
+  static const _gitRef = String.fromEnvironment(
+    'GIT_REF',
+    defaultValue: 'unknown-build',
+  );
+
+  /// Loading area that says WHICH phase is running, so a hang is visible
   /// in a screenshot instead of an anonymous spinner.
   Widget _buildLoading(RemoteUiState remote) {
     final String phase;
-    if (remote.isConnecting) {
+    if (remote.phase == 'reading-credentials') {
+      phase = 'Reading connection credentials…';
+    } else if (remote.isConnecting) {
       phase = 'Connecting to the server…';
     } else if (remote.isBusy) {
       phase =
-          'Detecting the agent in pane '
-          '${widget.paneId ?? remote.agentPaneId ?? ''}…';
+          'Detecting the agent in pane ${widget.paneId ?? remote.agentPaneId ?? ''}…';
     } else {
       phase = 'Opening the agent console…';
     }
@@ -173,6 +182,14 @@ class _AgentPaneConsoleScreenState
             phase,
             style: TextStyle(color: Theme.of(context).hintColor),
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'build: $_gitRef',
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).hintColor.withValues(alpha: 0.6),
+            ),
           ),
         ],
       ),
