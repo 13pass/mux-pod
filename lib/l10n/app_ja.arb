@@ -639,6 +639,7 @@
       }
     }
   },
+  "homeDashboard": "ダッシュボード",
   "homeAgent": "エージェント",
   "homeServers": "サーバー",
   "homeKeys": "鍵",

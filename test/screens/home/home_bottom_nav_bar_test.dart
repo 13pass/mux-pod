@@ -23,16 +23,20 @@ void main() {
     var selected = -1;
     await tester.pumpWidget(_buildApp(currentTab: 2, onSelectTab: (i) => selected = i));
 
-    // All five side labels are rendered (en locale default in tests).
+    // All six labels are rendered, evenly, with no overlay button
+    // stealing taps (en locale default in tests).
     expect(find.text('Servers'), findsOneWidget);
     expect(find.text('Keys'), findsOneWidget);
-    expect(find.text('Agent'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Notify'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Agent'), findsOneWidget);
     expect(find.byKey(const Key('home_nav_agent')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('home_nav_agent')));
     expect(selected, 5);
+    await tester.tap(find.text('Dashboard'));
+    expect(selected, 2);
   });
 
   testWidgets('tapping Servers/Keys/Notify/Settings selects their indices',

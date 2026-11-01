@@ -639,6 +639,7 @@
       }
     }
   },
+  "homeDashboard": "Dashboard",
   "homeAgent": "Agent",
   "homeServers": "Servers",
   "homeKeys": "Keys",

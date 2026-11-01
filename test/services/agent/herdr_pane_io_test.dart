@@ -4,12 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'fake_agent_transport.dart';
 
 /// Canned herdr CLI envelopes (shape verified against herdr 0.9.3).
+/// Real herdr 0.9 shape: `result.snapshot` is an object whose `panes`
+/// key holds the pane list (verified against a live server).
 const _snapshotJson = '''
-{"id":"cli:api:snapshot","result":{"snapshot":[
-  {"pane_id":"w5:p1","workspace_id":"w5","tab_id":"w5:t1","cwd":"/home/vincent/agents/vibe/revision-loyers"},
-  {"pane_id":"w5:p3","workspace_id":"w5","tab_id":"w5:t3","cwd":"/home/vincent/agents/vibe","terminal_title":"Vibe"},
-  {"pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"}
-]}}
+{"id":"cli:api:snapshot","result":{"snapshot":{
+  "protocol":22,
+  "workspaces":[],
+  "tabs":[],
+  "panes":[
+    {"pane_id":"w5:p1","workspace_id":"w5","tab_id":"w5:t1","cwd":"/home/vincent/agents/vibe/revision-loyers"},
+    {"pane_id":"w5:p3","workspace_id":"w5","tab_id":"w5:t3","cwd":"/home/vincent/agents/vibe","terminal_title":"Vibe"},
+    {"pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"}
+  ]
+}}}
 ''';
 
 String _processInfoJson(String name) => '''

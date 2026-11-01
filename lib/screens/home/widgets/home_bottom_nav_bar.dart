@@ -8,6 +8,11 @@ import '../../../theme/design_colors.dart';
 /// home 画面内部専用の表示部品。タブ状態は外部（[currentTab] / [onSelectTab]）
 /// から受け取り、自身では保持しない（状態所有権は中立
 /// `lib/navigation/current_tab_provider.dart` の [CurrentTabNotifier]）。
+///
+/// 6タブ（Servers / Keys / Dashboard / Notify / Settings / Agent）は
+/// 均等幅 [Expanded] で並べる。かつての「中央からはみ出す Dashboard 円形
+/// ボタン」は 5 タブ時代のデザインで、6 タブでは隣接アイテムに重なって
+/// タップを横取りするため廃止した。
 class HomeBottomNavBar extends StatelessWidget {
   const HomeBottomNavBar({
     super.key,
@@ -15,7 +20,8 @@ class HomeBottomNavBar extends StatelessWidget {
     required this.onSelectTab,
   });
 
-  /// 現在のタブインデックス（0=Servers, 1=Keys, 2=Dashboard, 3=Notify, 4=Settings, 5=Agent）。
+  /// 現在のタブインデックス（0=Servers, 1=Keys, 2=Dashboard, 3=Notify,
+  /// 4=Settings, 5=Agent）。
   final int currentTab;
 
   /// タブ選択時のコールバック（親がタブ状態へ反映する）。
@@ -38,126 +44,54 @@ class HomeBottomNavBar extends StatelessWidget {
       child: SafeArea(
         child: SizedBox(
           height: 72,
-          child: Stack(
-            clipBehavior: Clip.none,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // 通常のナビゲーションアイテム（5つ均等配置）
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Servers（左端）
-                  _buildNavItem(
-                    context,
-                    index: 0,
-                    icon: Icons.dns,
-                    label: context.l10n.homeServers,
-                    isSelected: currentTab == 0,
-                  ),
-                  // Keys（左寄り）
-                  _buildNavItem(
-                    context,
-                    index: 1,
-                    icon: Icons.key,
-                    label: context.l10n.homeKeys,
-                    isSelected: currentTab == 1,
-                  ),
-                  // 中央スペーサー（Dashboardボタンの場所）
-                  const SizedBox(width: 64),
-                  // Notify（右寄り）
-                  _buildNavItem(
-                    context,
-                    index: 3,
-                    icon: Icons.notifications_outlined,
-                    label: context.l10n.homeNotify,
-                    isSelected: currentTab == 3,
-                  ),
-                  // Settings（右端）
-                  _buildNavItem(
-                    context,
-                    index: 4,
-                    icon: Icons.settings,
-                    label: context.l10n.homeSettings,
-                    isSelected: currentTab == 4,
-                  ),
-                  // Agent / Remote UI（右端・中央ボタンとの重なり回避）
-                  _buildNavItem(
-                    context,
-                    key: const Key('home_nav_agent'),
-                    index: 5,
-                    icon: Icons.smart_toy_outlined,
-                    label: context.l10n.homeAgent,
-                    isSelected: currentTab == 5,
-                  ),
-                ],
+              _buildNavItem(
+                context,
+                index: 0,
+                icon: Icons.dns,
+                label: context.l10n.homeServers,
+                isSelected: currentTab == 0,
               ),
-              // Dashboard（中央・大きくはみ出すボタン）
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 8,
-                child: Center(
-                  child: _buildCenterButton(
-                    context,
-                    isSelected: currentTab == 2,
-                  ),
-                ),
+              _buildNavItem(
+                context,
+                index: 1,
+                icon: Icons.key,
+                label: context.l10n.homeKeys,
+                isSelected: currentTab == 1,
+              ),
+              _buildNavItem(
+                context,
+                index: 2,
+                icon: Icons.terminal,
+                label: context.l10n.homeDashboard,
+                isSelected: currentTab == 2,
+              ),
+              _buildNavItem(
+                context,
+                index: 3,
+                icon: Icons.notifications_outlined,
+                label: context.l10n.homeNotify,
+                isSelected: currentTab == 3,
+              ),
+              _buildNavItem(
+                context,
+                index: 4,
+                icon: Icons.settings,
+                label: context.l10n.homeSettings,
+                isSelected: currentTab == 4,
+              ),
+              _buildNavItem(
+                context,
+                key: const Key('home_nav_agent'),
+                index: 5,
+                icon: Icons.smart_toy_outlined,
+                label: context.l10n.homeAgent,
+                isSelected: currentTab == 5,
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  /// 中央のDashboardボタン（大きくはみ出す）
-  Widget _buildCenterButton(BuildContext context, {required bool isSelected}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
-      onTap: () => onSelectTab(2),
-      child: Container(
-        width: 72,
-        height: 72,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: isSelected
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    DesignColors.primary,
-                    DesignColors.primary.withValues(alpha: 0.8),
-                  ],
-                )
-              : null,
-          color: isSelected
-              ? null
-              : (isDark ? DesignColors.surfaceDark : DesignColors.surfaceLight),
-          border: Border.all(
-            color: isSelected
-                ? DesignColors.primary
-                : (isDark ? DesignColors.borderDark : DesignColors.borderLight),
-            width: 3,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isSelected
-                  ? DesignColors.primary.withValues(alpha: 0.5)
-                  : Colors.black.withValues(alpha: isDark ? 0.4 : 0.2),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Icon(
-          Icons.terminal,
-          size: 36,
-          color: isSelected
-              ? Colors.white
-              : (isDark
-                    ? DesignColors.textSecondary
-                    : DesignColors.textSecondaryLight),
         ),
       ),
     );

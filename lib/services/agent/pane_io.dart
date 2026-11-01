@@ -157,10 +157,13 @@ class HerdrPaneIO implements PaneIO {
     final decoded = jsonDecode(snapshotJson);
     final result = decoded is Map<String, dynamic> ? resultOf(decoded) : null;
     final snapshot = result is Map<String, dynamic> ? result['snapshot'] : null;
-    if (snapshot is! List) return const [];
+    // herdr 0.9: result.snapshot is an object with a "panes" list (plus
+    // agents/tabs/workspaces). Tolerate a flat pane list as well.
+    final panesRaw = snapshot is Map<String, dynamic> ? snapshot['panes'] : snapshot;
+    if (panesRaw is! List) return const [];
 
     final panes = <AgentPaneInfo>[];
-    for (final raw in snapshot) {
+    for (final raw in panesRaw) {
       if (raw is! Map<String, dynamic>) continue;
       final paneId = raw['pane_id'];
       if (paneId is! String || paneId.isEmpty) continue;
