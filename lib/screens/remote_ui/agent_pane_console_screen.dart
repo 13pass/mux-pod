@@ -9,7 +9,6 @@ import '../../services/agent/agent_types.dart';
 import '../../services/agent/pane_io.dart';
 import '../../theme/design_colors.dart';
 import 'remote_ui_model_intelligence_sheet.dart';
-import 'remote_ui_permission_sheet.dart';
 
 /// Full-screen agent console for ONE multiplexer pane, pushed on top of
 /// the terminal.
@@ -21,7 +20,7 @@ import 'remote_ui_permission_sheet.dart';
 /// agents (Vibe, Claude Code, Codex, Droid) accept input.
 ///
 /// The chips control the running agent through its adapter (model /
-/// reasoning effort / permission mode).
+/// reasoning effort).
 class AgentPaneConsoleScreen extends ConsumerStatefulWidget {
   const AgentPaneConsoleScreen({
     super.key,
@@ -49,7 +48,6 @@ class _AgentPaneConsoleScreenState
     extends ConsumerState<AgentPaneConsoleScreen> {
   static const _sendButtonKey = Key('agent_console.send_button');
   static const _composerKey = Key('agent_console.composer');
-  static const _permissionChipKey = Key('agent_console.permission_chip');
   static const _modelChipKey = Key('agent_console.model_chip');
 
   final _composerController = TextEditingController();
@@ -430,7 +428,6 @@ class _AgentPaneConsoleScreenState
     AgentAdapter agent,
     Color border,
   ) {
-    final capabilities = agent.capabilities;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
@@ -442,20 +439,16 @@ class _AgentPaneConsoleScreenState
             children: [
               // The model sheet also accepts free-text model names
               // (availableModels is a convenience list, not an allowlist).
+              //
+              // No permission control here on purpose: the agent keeps
+              // the permissions of its own server-side config; managing
+              // them from the phone is out of scope for the console.
               _PillChip(
                 key: _modelChipKey,
                 label: _modelChipLabel(remote.config),
                 icon: Icons.auto_awesome,
                 onTap: _openModelSheet,
               ),
-              const SizedBox(width: 8),
-              if (capabilities.permissionLevels.isNotEmpty)
-                _PillChip(
-                  key: _permissionChipKey,
-                  label: remote.config.permission?.label ?? 'Permissions',
-                  icon: Icons.lock_outline,
-                  onTap: _openPermissionSheet,
-                ),
               const Spacer(),
             ],
           ),
@@ -516,21 +509,6 @@ class _AgentPaneConsoleScreenState
         result.intelligence != remote.config.intelligence) {
       await notifier.applyIntelligence(result.intelligence!);
     }
-  }
-
-  Future<void> _openPermissionSheet() async {
-    final remote = ref.read(remoteUiProvider);
-    final agent = remote.agent;
-    if (agent == null) return;
-    final level = await RemoteUiPermissionSheet.show(
-      context,
-      selected: remote.config.permission,
-      permissions: agent.capabilities.permissionLevels,
-    );
-    if (!mounted || level == null || level == remote.config.permission) {
-      return;
-    }
-    await ref.read(remoteUiProvider.notifier).applyPermission(level);
   }
 
   void _send() {

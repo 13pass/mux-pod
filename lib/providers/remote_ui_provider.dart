@@ -551,11 +551,6 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   Future<void> applyIntelligence(UnifiedIntelligence level) =>
       _apply((adapter, context) => adapter.applyIntelligence(context, level));
 
-  /// Applies an autonomy/permission change to the detected live-pane
-  /// agent.
-  Future<void> applyPermission(UnifiedPermission level) =>
-      _apply((adapter, context) => adapter.applyPermission(context, level));
-
   /// Toggles plan/spec mode on the detected live-pane agent.
   Future<void> setPlanMode(bool enabled) =>
       _apply((adapter, context) => adapter.setPlanMode(context, enabled));

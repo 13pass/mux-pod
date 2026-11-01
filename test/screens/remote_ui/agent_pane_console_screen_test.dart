@@ -33,13 +33,9 @@ class _FixedRemoteUiNotifier extends RemoteUiNotifier {
   }
 
   @override
+  @override
   Future<void> applyModel(String model) async {
     calls.add('applyModel($model)');
-  }
-
-  @override
-  Future<void> applyPermission(UnifiedPermission level) async {
-    calls.add('applyPermission($level)');
   }
 
   @override
@@ -89,10 +85,7 @@ void main() {
         agent: VibeAdapter(),
         agentPaneId: 'w5:p3',
         agentPanePath: '/home/vincent/agents/vibe',
-        config: const AgentConfig(
-          model: 'mistral-large-4-0-3',
-          permission: UnifiedPermission.autoReview,
-        ),
+        config: const AgentConfig(model: 'mistral-large-4-0-3'),
       ),
     );
     await tester.pumpWidget(_buildApp(remote));
@@ -104,7 +97,6 @@ void main() {
     // Chips + composer visible for a detected agent.
     expect(find.byKey(const Key('agent_console.composer')), findsOneWidget);
     expect(find.textContaining('mistral-large-4-0-3'), findsOneWidget);
-    expect(find.textContaining('Auto-review'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const Key('agent_console.composer')),
