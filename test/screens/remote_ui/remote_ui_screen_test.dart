@@ -158,8 +158,6 @@ void main() {
 
       expect(find.text("Let's work on"), findsOneWidget);
       expect(find.text('Select a server'), findsOneWidget);
-      expect(find.text('Workspace'), findsOneWidget);
-      expect(find.text('Worktree'), findsOneWidget);
       expect(find.byKey(const Key('remote_ui.agent_picker')), findsOneWidget);
       // No server selected: composer/chips are hidden, only the empty state.
       expect(find.byKey(const Key('remote_ui.composer')), findsNothing);
@@ -421,18 +419,6 @@ void main() {
 
       expect(chat.newSessionCalls, 1);
       expect(find.text("Let's work on"), findsOneWidget);
-    });
-
-    testWidgets('workspace/worktree toggle updates the chat provider',
-        (tester) async {
-      final chat = _FakeRemoteUiChatNotifier(const RemoteUiChatState());
-      await tester.pumpWidget(_buildApp(chat));
-      await tester.pumpAndSettle();
-
-      expect(chat.state.worktreeMode, isFalse);
-      await tester.tap(find.text('Worktree'));
-      await tester.pumpAndSettle();
-      expect(chat.state.worktreeMode, isTrue);
     });
 
     testWidgets('plus menu toggles plan mode; upload without server hints',

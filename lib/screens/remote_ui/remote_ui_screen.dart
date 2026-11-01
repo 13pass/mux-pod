@@ -299,31 +299,8 @@ class _RemoteUiScreenState extends ConsumerState<RemoteUiScreen> {
             onTap: _pickServer,
           ),
           const SizedBox(height: 18),
-          // Chat mode only: the workspace/worktree choice and the agent
-          // picker configure the headless chat, not the live pane.
+          // Chat mode only: pick which agent the headless chat runs on.
           if (!isLiveMode) ...[
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('Workspace')),
-                ButtonSegment(value: true, label: Text('Worktree')),
-              ],
-              selected: {chat.worktreeMode},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) => ref
-                  .read(remoteUiChatProvider.notifier)
-                  .setWorktreeMode(selection.first),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Where the headless chat runs: in the detected pane\'s '
-              'directory, or in a fresh git worktree so the repository '
-              'stays untouched.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: textMuted,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 18),
             _TargetPickerRow(
               key: _agentPickerKey,
               label: chat.agentKind.displayName,

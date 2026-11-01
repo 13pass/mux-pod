@@ -40,10 +40,6 @@ class RemoteUiChatState {
   /// True while a headless run is streaming.
   final bool isStreaming;
 
-  /// Workspace/Worktree toggle: when true, prompts run in a dedicated
-  /// git worktree instead of the base working directory.
-  final bool worktreeMode;
-
   /// Last error message, if any.
   final String? error;
 
@@ -55,7 +51,6 @@ class RemoteUiChatState {
     this.messages = const [],
     this.streamingText = '',
     this.isStreaming = false,
-    this.worktreeMode = false,
     this.error,
   });
 
@@ -69,7 +64,6 @@ class RemoteUiChatState {
     List<ChatMessageRecord>? messages,
     String? streamingText,
     bool? isStreaming,
-    bool? worktreeMode,
     Object? error = _unset,
   }) {
     return RemoteUiChatState(
@@ -82,7 +76,6 @@ class RemoteUiChatState {
       messages: messages ?? this.messages,
       streamingText: streamingText ?? this.streamingText,
       isStreaming: isStreaming ?? this.isStreaming,
-      worktreeMode: worktreeMode ?? this.worktreeMode,
       error: error == _unset ? this.error : error as String?,
     );
   }
@@ -204,11 +197,6 @@ class RemoteUiChatNotifier extends Notifier<RemoteUiChatState> {
     );
   }
 
-  /// Switches between Workspace and Worktree mode.
-  void setWorktreeMode(bool worktree) {
-    state = state.copyWith(worktreeMode: worktree);
-  }
-
   /// Sends [text] to the agent, streaming the response into state.
   ///
   /// Creates a stored session on the first message. Follow-up messages
@@ -269,8 +257,7 @@ class RemoteUiChatNotifier extends Notifier<RemoteUiChatState> {
     final activeSession =
         state.sessions.where((s) => s.id == activeId).firstOrNull;
 
-    final workingDirectory =
-        await _resolveWorkingDirectory(SshAgentTransport(client));
+    final workingDirectory = await _resolveWorkingDirectory();
     final config = state.pendingConfig;
     final session = HeadlessAgentSession(
       ssh: SshAgentTransport(client),
@@ -456,36 +443,8 @@ class RemoteUiChatNotifier extends Notifier<RemoteUiChatState> {
 
   /// Base directory for headless runs: the detected agent pane's
   /// directory when known, otherwise the remote home directory.
-  ///
-  /// In worktree mode a dedicated git worktree is created under
-  /// `.muxpod-worktrees/` next to the repository root; returns null
-  /// (remote default) when the base directory is not a git repository.
-  Future<String?> _resolveWorkingDirectory(AgentTransport client) async {
-    final base = ref.read(remoteUiProvider).agentPanePath;
-    if (!state.worktreeMode) return base;
-
-    final sessionSuffix = (state.activeSessionId ?? 'chat')
-        .replaceAll(RegExp('[^a-zA-Z0-9-]'), '')
-        .substring(0, 8);
-    final script = base != null
-        ? "cd '${base.replaceAll("'", r"'\''")}' && "
-            'top=\$(git rev-parse --show-toplevel 2>/dev/null) && '
-            'wt="\$top/.muxpod-worktrees/$sessionSuffix" && '
-            '(git -C "\$top" worktree add --detach "\$wt" HEAD '
-            '2>/dev/null || true) && '
-            'test -d "\$wt" && printf %s "\$wt"'
-        : '';
-    if (script.isEmpty) return null;
-
-    try {
-      final result = await client.execWithExitCode(script);
-      if (result.exitCode == 0 && result.stdout.trim().isNotEmpty) {
-        return result.stdout.trim();
-      }
-    } on Object {
-      // Fall through to the base directory.
-    }
-    return base;
+  Future<String?> _resolveWorkingDirectory() async {
+    return ref.read(remoteUiProvider).agentPanePath;
   }
 }
 
