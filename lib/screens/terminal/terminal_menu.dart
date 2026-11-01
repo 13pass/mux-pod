@@ -31,6 +31,7 @@ class TerminalMenu {
     required VoidCallback onEnterSelectMode,
     required VoidCallback onResetZoom,
     required VoidCallback onOpenSettings,
+    required VoidCallback onOpenAgentTab,
     required VoidCallback onDisconnect,
     required VoidCallback onSheetClosed,
   }) {
@@ -165,6 +166,26 @@ class TerminalMenu {
                         Navigator.pop(context);
                       }
                     : null,
+              ),
+              Divider(
+                height: 1,
+                color: isDark ? const Color(0xFF2A2B36) : Colors.grey.shade300,
+              ),
+              // Agent タブ（Remote UI）へ
+              ListTile(
+                leading: Icon(Icons.smart_toy_outlined, color: inactiveIconColor),
+                title: Text(
+                  context.l10n.termAgentRemoteUi,
+                  style: TextStyle(color: textColor),
+                ),
+                subtitle: Text(
+                  context.l10n.termAgentRemoteUiSubtitle,
+                  style: TextStyle(color: mutedTextColor, fontSize: 12),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  onOpenAgentTab();
+                },
               ),
               Divider(
                 height: 1,

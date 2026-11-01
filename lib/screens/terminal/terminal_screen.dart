@@ -13,6 +13,8 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../navigation/current_tab_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -538,6 +540,11 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         onOpenSettings: () => Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+        onOpenAgentTab: () {
+          // ターミナルを閉じてホームの Agent タブ（Remote UI）へ
+          Navigator.of(context).pop();
+          ref.read(currentTabProvider.notifier).setTab(5);
+        },
         onDisconnect: () =>
             _adapter.connection.showDisconnectConfirmation(context),
         onSheetClosed: () => _adapter.ports.showScrollToBottomButton(),

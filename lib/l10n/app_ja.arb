@@ -848,6 +848,8 @@
     }
   },
   "termPinchToZoom": "ピンチでズームイン/アウト",
+  "termAgentRemoteUi": "エージェント (Remote UI)",
+  "termAgentRemoteUiSubtitle": "このペインのAIエージェントをチャットUIから操作",
   "termSettings": "設定",
   "termSettingsSubtitle": "フォント・テーマなどのオプション",
   "termDisconnect": "切断",

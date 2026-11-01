@@ -64,14 +64,6 @@ class HomeBottomNavBar extends StatelessWidget {
                   ),
                   // 中央スペーサー（Dashboardボタンの場所）
                   const SizedBox(width: 64),
-                  // Agent / Remote UI（中央右）
-                  _buildNavItem(
-                    context,
-                    index: 5,
-                    icon: Icons.smart_toy_outlined,
-                    label: context.l10n.homeAgent,
-                    isSelected: currentTab == 5,
-                  ),
                   // Notify（右寄り）
                   _buildNavItem(
                     context,
@@ -87,6 +79,15 @@ class HomeBottomNavBar extends StatelessWidget {
                     icon: Icons.settings,
                     label: context.l10n.homeSettings,
                     isSelected: currentTab == 4,
+                  ),
+                  // Agent / Remote UI（右端・中央ボタンとの重なり回避）
+                  _buildNavItem(
+                    context,
+                    key: const Key('home_nav_agent'),
+                    index: 5,
+                    icon: Icons.smart_toy_outlined,
+                    label: context.l10n.homeAgent,
+                    isSelected: currentTab == 5,
                   ),
                 ],
               ),
@@ -164,6 +165,7 @@ class HomeBottomNavBar extends StatelessWidget {
 
   Widget _buildNavItem(
     BuildContext context, {
+    Key? key,
     required int index,
     required IconData icon,
     required String label,
@@ -174,6 +176,7 @@ class HomeBottomNavBar extends StatelessWidget {
         ? DesignColors.textMuted
         : DesignColors.textMutedLight;
     return Expanded(
+      key: key,
       child: GestureDetector(
         onTap: () => onSelectTab(index),
         behavior: HitTestBehavior.opaque,

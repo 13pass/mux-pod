@@ -848,6 +848,8 @@
     }
   },
   "termPinchToZoom": "Pinch to zoom in/out",
+  "termAgentRemoteUi": "Agent (Remote UI)",
+  "termAgentRemoteUiSubtitle": "Control the AI agent in this pane from a chat UI",
   "termSettings": "Settings",
   "termSettingsSubtitle": "Font, theme, and other options",
   "termDisconnect": "Disconnect",
