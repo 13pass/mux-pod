@@ -203,14 +203,17 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     await _ensureConnected(connectionId);
     final paneIO = _paneIO;
     if (paneIO == null || state.connectionId != connectionId) return result;
-    for (final paneId in paneIds) {
-      try {
-        final info = await paneIO.paneInfoById(paneId);
-        final adapter = AgentRegistry.detect(info?.command);
-        if (adapter != null) result[paneId] = adapter.kind;
-      } on Object {
-        // A vanished pane must not abort the remaining lookups.
+    try {
+      // One scan resolves every pane: per-pane lookups would re-run the
+      // whole snapshot N times (minutes on a phone).
+      final wanted = paneIds.toSet();
+      for (final pane in await paneIO.listPanes()) {
+        if (!wanted.contains(pane.id)) continue;
+        final adapter = AgentRegistry.detect(pane.command);
+        if (adapter != null) result[pane.id] = adapter.kind;
       }
+    } on Object {
+      // Badges are cosmetic; never block the sheet on failure.
     }
     return result;
   }
@@ -224,7 +227,11 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       return;
     }
     final connection = ref.read(connectionsProvider.notifier).getById(connectionId);
-    if (connection == null) return;
+    if (connection == null) {
+      // Unknown id: do not leave isConnecting stuck on (infinite spinner).
+      state = state.copyWith(isConnecting: false, error: 'Unknown connection');
+      return;
+    }
 
     state = state.copyWith(
       isConnecting: true,

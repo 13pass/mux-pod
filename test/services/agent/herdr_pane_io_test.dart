@@ -86,6 +86,27 @@ void main() {
       ]);
     });
 
+    test('paneInfoById resolves one pane with a single process-info call',
+        () async {
+      final t = FakeAgentTransport();
+      final io = HerdrPaneIO(t);
+      t.onExec = (command) {
+        if (command.contains('api snapshot')) return _snapshotJson;
+        if (command.contains('process-info --pane w5:p3')) {
+          return _processInfoJson('Vibe CLI');
+        }
+        throw StateError(
+            'must not probe other panes, got: $command');
+      };
+      final pane = await io.paneInfoById('w5:p3');
+      expect(pane, isNotNull);
+      expect(pane!.id, 'w5:p3');
+      expect(pane.command, 'vibe');
+      // snapshot + exactly one process-info for the target pane.
+      expect(t.execCommands.where((c) => c.contains('process-info')), hasLength(1));
+      expect(t.execCommands.where((c) => c.contains('api snapshot')), hasLength(1));
+    });
+
     test('listPanes tolerates a pane that disappears mid-scan', () async {
       final t = FakeAgentTransport();
       final io = HerdrPaneIO(t);

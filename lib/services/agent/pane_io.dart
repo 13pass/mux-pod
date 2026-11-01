@@ -147,9 +147,7 @@ class HerdrPaneIO implements PaneIO {
     final resolved = _resolvedBin;
     if (resolved != null) return resolved;
     try {
-      final out = await _transport.exec(
-        r"\$SHELL -lc 'command -v herdr'",
-      );
+      final out = await _transport.exec(r"\$SHELL -lc 'command -v herdr'");
       final path = out.trim();
       if (path.startsWith('/')) {
         _resolvedBin = path;
@@ -161,8 +159,18 @@ class HerdrPaneIO implements PaneIO {
     return 'herdr';
   }
 
-  @override
-  Future<List<AgentPaneInfo>> listPanes() async {
+  /// Raw pane entries of the last snapshot (pane_id + cwd), cached for
+  /// [_snapshotCacheTtl] so a burst of lookups (badges + one console open)
+  /// costs ONE snapshot round trip instead of one per lookup.
+  static const _snapshotCacheTtl = Duration(seconds: 5);
+  ({List<({String id, String? path})> panes, DateTime at})? _snapshotCache;
+
+  Future<List<({String id, String? path})>> _snapshotPanes() async {
+    final cached = _snapshotCache;
+    if (cached != null &&
+        DateTime.now().difference(cached.at) < _snapshotCacheTtl) {
+      return cached.panes;
+    }
     final bin = await _bin();
     final snapshotJson = await _transport.exec('$bin api snapshot');
     final decoded = jsonDecode(snapshotJson);
@@ -170,37 +178,48 @@ class HerdrPaneIO implements PaneIO {
     final snapshot = result is Map<String, dynamic> ? result['snapshot'] : null;
     // herdr 0.9: result.snapshot is an object with a "panes" list (plus
     // agents/tabs/workspaces). Tolerate a flat pane list as well.
-    final panesRaw = snapshot is Map<String, dynamic> ? snapshot['panes'] : snapshot;
-    if (panesRaw is! List) return const [];
-
-    final panes = <AgentPaneInfo>[];
-    for (final raw in panesRaw) {
-      if (raw is! Map<String, dynamic>) continue;
-      final paneId = raw['pane_id'];
-      if (paneId is! String || paneId.isEmpty) continue;
-      final cwd = raw['cwd'];
-      // The foreground process name needs one extra call per pane.
-      String? command;
-      try {
-        command = await currentCommand(paneId);
-      } on Object {
-        command = null; // pane may have closed between snapshot and query
+    final panesRaw = snapshot is Map<String, dynamic>
+        ? snapshot['panes']
+        : snapshot;
+    final panes = <({String id, String? path})>[];
+    if (panesRaw is List) {
+      for (final raw in panesRaw) {
+        if (raw is! Map<String, dynamic>) continue;
+        final paneId = raw['pane_id'];
+        if (paneId is! String || paneId.isEmpty) continue;
+        final cwd = raw['cwd'];
+        panes.add((id: paneId, path: cwd is String ? cwd : null));
       }
-      panes.add(
-        AgentPaneInfo(
-          id: paneId,
-          command: command,
-          path: cwd is String ? cwd : null,
-        ),
-      );
     }
+    _snapshotCache = (panes: panes, at: DateTime.now());
     return panes;
+  }
+
+  Future<AgentPaneInfo> _withCommand(({String id, String? path}) pane) async {
+    // The foreground process name needs one extra call per pane; a pane
+    // that closed between snapshot and query just reports no command.
+    String? command;
+    try {
+      command = await currentCommand(pane.id);
+    } on Object {
+      command = null;
+    }
+    return AgentPaneInfo(id: pane.id, command: command, path: pane.path);
+  }
+
+  @override
+  Future<List<AgentPaneInfo>> listPanes() async {
+    return [
+      for (final pane in await _snapshotPanes()) await _withCommand(pane),
+    ];
   }
 
   @override
   Future<AgentPaneInfo?> paneInfoById(String paneId) async {
-    for (final pane in await listPanes()) {
-      if (pane.id == paneId) return pane;
+    // Resolve a single pane WITHOUT the per-pane process-info scan of
+    // [listPanes]: snapshot (cached) + one process-info for the target.
+    for (final pane in await _snapshotPanes()) {
+      if (pane.id == paneId) return await _withCommand(pane);
     }
     return null;
   }
@@ -249,6 +268,5 @@ class HerdrPaneIO implements PaneIO {
   static String _shellQuote(String value) =>
       "'${value.replaceAll("'", r"'\''")}'";
 
-  static dynamic resultOf(Map<String, dynamic> envelope) =>
-      envelope['result'];
+  static dynamic resultOf(Map<String, dynamic> envelope) => envelope['result'];
 }
