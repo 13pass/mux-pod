@@ -33,6 +33,7 @@ void main() {
       final t = FakeAgentTransport();
       final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
       t.onExec = (command) {
+        if (command.startsWith('test -x -- ')) return ''; // bin verification
         if (command.contains('api snapshot')) return _snapshotJson;
         if (command.contains('pane process-info --pane w5:p1')) {
           return _processInfoJson('zsh');
@@ -57,11 +58,9 @@ void main() {
       expect(panes[1].command, 'vibe');
       expect(panes[1].path, '/home/vincent/agents/vibe');
       expect(panes[2].command, 'node');
-      // The custom herdr binary path is used.
-      expect(
-        t.execCommands.first,
-        '/usr/local/bin/herdr api snapshot',
-      );
+      // The custom herdr binary path is used (after the test -x probe).
+      expect(t.execCommands.first, 'test -x -- /usr/local/bin/herdr');
+      expect(t.execCommands[1], '/usr/local/bin/herdr api snapshot');
     });
 
     test('currentCommand returns the lowercased first word of the process name',
@@ -91,6 +90,8 @@ void main() {
       final t = FakeAgentTransport();
       final io = HerdrPaneIO(t);
       t.onExec = (command) {
+        if (command.startsWith('test -x -- ')) return ''; // bin auto-detect
+        if (command.contains(r"\$SHELL -lc")) return ''; // no result -> fallback
         if (command.contains('api snapshot')) return _snapshotJson;
         if (command.contains('process-info --pane w5:p3')) {
           return _processInfoJson('Vibe CLI');

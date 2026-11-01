@@ -146,15 +146,50 @@ class HerdrPaneIO implements PaneIO {
 
   /// herdr binary to invoke: the configured absolute path when set,
   /// otherwise auto-detected via the login shell on first use.
+  Future<bool> _existsOnServer(String path) async {
+    try {
+      final result = await _transport.execWithExitCode('test -x -- $path');
+      return result.exitCode == 0;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<String> _bin() async {
-    final configured = _herdrBin;
-    if (configured != null && configured.isNotEmpty) return configured;
     final resolved = _resolvedBin;
     if (resolved != null) return resolved;
+    final configured = _herdrBin;
+    if (configured != null &&
+        configured.isNotEmpty &&
+        await _existsOnServer(configured)) {
+      _resolvedBin = configured;
+      return configured;
+    }
     try {
-      final out = await _transport.exec(r"\$SHELL -lc 'command -v herdr'");
-      final path = out.trim();
-      if (path.startsWith('/')) {
+      // Non-interactive exec channels carry no login PATH and often no
+      // $SHELL, so probe the standard install locations in ONE round
+      // trip, then the login shell as a last resort.
+      final out = await _transport.execWithExitCode(
+        r'for p in "$HOME/.local/bin/herdr" /usr/local/bin/herdr '
+        r'/usr/bin/herdr; do test -x "$p" && { printf %s "$p"; exit 0; }; '
+        'done; exit 1',
+        timeout: _execTimeout,
+      );
+      final path = out.stdout.trim();
+      if (out.exitCode == 0 && path.startsWith('/')) {
+        _resolvedBin = path;
+        return path;
+      }
+    } on Object {
+      // fall through to the login-shell probe
+    }
+    try {
+      final out = await _transport.execWithExitCode(
+        r'${SHELL:-/bin/bash} -lc "command -v herdr"',
+        timeout: _execTimeout,
+      );
+      final path = out.stdout.trim();
+      if (out.exitCode == 0 && path.startsWith('/')) {
         _resolvedBin = path;
         return path;
       }
@@ -177,18 +212,26 @@ class HerdrPaneIO implements PaneIO {
       return cached.panes;
     }
     final bin = await _bin();
-    final snapshotJson = await _transport.exec(
+    final snapshot = await _transport.execWithExitCode(
       '$bin api snapshot',
       timeout: _execTimeout,
     );
-    final decoded = jsonDecode(snapshotJson);
+    if (snapshot.exitCode != 0 || snapshot.stdout.trim().isEmpty) {
+      throw StateError(
+        'herdr api snapshot failed (exit ${snapshot.exitCode})'
+        '${snapshot.stderr.trim().isEmpty ? '' : ': ${snapshot.stderr.trim()}'}',
+      );
+    }
+    final decoded = jsonDecode(snapshot.stdout);
     final result = decoded is Map<String, dynamic> ? resultOf(decoded) : null;
-    final snapshot = result is Map<String, dynamic> ? result['snapshot'] : null;
+    final snapshotObj = result is Map<String, dynamic>
+        ? result['snapshot']
+        : null;
     // herdr 0.9: result.snapshot is an object with a "panes" list (plus
     // agents/tabs/workspaces). Tolerate a flat pane list as well.
-    final panesRaw = snapshot is Map<String, dynamic>
-        ? snapshot['panes']
-        : snapshot;
+    final panesRaw = snapshotObj is Map<String, dynamic>
+        ? snapshotObj['panes']
+        : snapshotObj;
     final panes = <({String id, String? path})>[];
     if (panesRaw is List) {
       for (final raw in panesRaw) {
@@ -237,15 +280,20 @@ class HerdrPaneIO implements PaneIO {
     // Pane ids are herdr-generated (`w5:p3`) — safe unquoted, same as
     // [HerdrCommands.paneSendText].
     final bin = await _bin();
-    final out = await _transport.exec(
+    final info = await _transport.execWithExitCode(
       '$bin pane process-info --pane $paneId',
       timeout: _execTimeout,
     );
-    final decoded = jsonDecode(out);
+    if (info.exitCode != 0 || info.stdout.trim().isEmpty) {
+      return null; // pane closed or herdr could not report it
+    }
+    final decoded = jsonDecode(info.stdout);
     final result = decoded is Map<String, dynamic> ? resultOf(decoded) : null;
-    final info = result is Map<String, dynamic> ? result['process_info'] : null;
-    if (info is! Map<String, dynamic>) return null;
-    final processes = info['foreground_processes'];
+    final processInfo = result is Map<String, dynamic>
+        ? result['process_info']
+        : null;
+    if (processInfo is! Map<String, dynamic>) return null;
+    final processes = processInfo['foreground_processes'];
     if (processes is! List || processes.isEmpty) return null;
     final first = processes.first;
     if (first is! Map<String, dynamic>) return null;

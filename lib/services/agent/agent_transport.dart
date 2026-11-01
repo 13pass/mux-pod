@@ -23,7 +23,7 @@ abstract class AgentTransport {
   Future<String> exec(String command, {Duration? timeout});
 
   /// Runs [command] and returns the full result including the exit code.
-  Future<CommandResult> execWithExitCode(String command);
+  Future<CommandResult> execWithExitCode(String command, {Duration? timeout});
 
   /// Runs [command] preferring the persistent polling shell (merged
   /// output) and returns its output.
@@ -65,7 +65,7 @@ class SshAgentTransport implements AgentTransport {
   }
 
   @override
-  Future<CommandResult> execWithExitCode(String command) {
+  Future<CommandResult> execWithExitCode(String command, {Duration? timeout}) {
     return _client.execute(
       CommandRequest(
         command: command,

@@ -98,8 +98,10 @@ class FakeAgentTransport implements AgentTransport {
       _emulate(command).stdout;
 
   @override
-  Future<CommandResult> execWithExitCode(String command) async =>
-      _emulate(command);
+  Future<CommandResult> execWithExitCode(
+    String command, {
+    Duration? timeout,
+  }) async => _emulate(command);
 
   @override
   Future<String> execPersistent(String command) async =>
@@ -123,12 +125,13 @@ class FakeAgentTransport implements AgentTransport {
   /// Applies the shell semantics of
   /// [AgentConfigService.writeRemoteFileAtomic] to [files].
   void _emulateAtomicWrite(String command) {
-    final encoded = RegExp(r"printf '%s' '([A-Za-z0-9+/=]*)'")
-        .firstMatch(command)!
-        .group(1)!;
+    final encoded = RegExp(
+      r"printf '%s' '([A-Za-z0-9+/=]*)'",
+    ).firstMatch(command)!.group(1)!;
     final content = utf8.decode(base64.decode(encoded));
-    final mvMatch =
-        RegExp(r'mv -f -- "([^"]+)" "([^"]+)"').firstMatch(command)!;
+    final mvMatch = RegExp(
+      r'mv -f -- "([^"]+)" "([^"]+)"',
+    ).firstMatch(command)!;
     final target = mvMatch.group(2)!;
     final backup = '$target${AgentConfigService.backupSuffix}';
     final existing = files[target];
