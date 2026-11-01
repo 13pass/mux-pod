@@ -233,13 +233,34 @@ class _AgentPaneConsoleScreenState
                 (remote.error != null && remote.error!.isNotEmpty)
                     ? remote.error!
                     : (_openTimeout ??
-                          'No AI agent detected in this pane.\n'
-                              'Start an agent (vibe, claude, codex, droid) there '
-                              'and reopen the console.'),
+                          (widget.paneId == null
+                              ? 'No AI agent detected on this server.\n'
+                                    'Start an agent (vibe, claude, codex, droid) '
+                                    'in a pane and reopen the console.'
+                              : 'No AI agent detected in this pane.\n'
+                                    'Start an agent (vibe, claude, codex, droid) there '
+                                    'and reopen the console.')),
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: textMuted),
                 textAlign: TextAlign.center,
+              ),
+              if (remote.detectDetail != null &&
+                  remote.detectDetail!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  remote.detectDetail!,
+                  style: TextStyle(fontSize: 11, color: textMuted),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                'build: $_gitRef',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: textMuted.withValues(alpha: 0.6),
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(

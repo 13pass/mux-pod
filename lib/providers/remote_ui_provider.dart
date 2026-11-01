@@ -42,6 +42,10 @@ class RemoteUiState {
   /// Human label of the agent pane (workspace / tab / pane title).
   final String? agentPaneLabel;
 
+  /// What detection actually saw (pane command / scan stats), shown in
+  /// the console when no agent is found so a screenshot explains itself.
+  final String? detectDetail;
+
   /// Last known agent configuration.
   final AgentConfig config;
 
@@ -66,6 +70,7 @@ class RemoteUiState {
     this.agentPaneId,
     this.agentPanePath,
     this.agentPaneLabel,
+    this.detectDetail,
     this.config = const AgentConfig(),
     this.isBusy = false,
     this.error,
@@ -83,6 +88,7 @@ class RemoteUiState {
     Object? agentPaneId = _unset,
     Object? agentPanePath = _unset,
     Object? agentPaneLabel = _unset,
+    Object? detectDetail = _unset,
     AgentConfig? config,
     bool? isBusy,
     Object? error = _unset,
@@ -105,6 +111,9 @@ class RemoteUiState {
       agentPaneLabel: agentPaneLabel == _unset
           ? this.agentPaneLabel
           : agentPaneLabel as String?,
+      detectDetail: detectDetail == _unset
+          ? this.detectDetail
+          : detectDetail as String?,
       config: config ?? this.config,
       isBusy: isBusy ?? this.isBusy,
       error: error == _unset ? this.error : error as String?,
@@ -172,13 +181,26 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
 
       AgentAdapter? found;
       AgentPaneInfo? pane;
+      final detail = StringBuffer();
       if (paneId != null) {
         pane = await paneIO.paneInfoById(paneId);
         found = pane == null ? null : AgentRegistry.detect(pane.command);
+        detail.write(
+          'pane $paneId: '
+          '${pane == null ? "not in snapshot" : (pane.command ?? "no foreground process reported")}',
+        );
       }
       if (found == null) {
         // Fall back to the first pane running a known agent.
-        for (final candidate in await paneIO.listPanes()) {
+        final candidates = await paneIO.listPanes();
+        var resolved = 0;
+        for (final candidate in candidates) {
+          if (candidate.command != null) resolved++;
+        }
+        detail.write(
+          ' | scan: ${candidates.length} panes, $resolved command(s) resolved',
+        );
+        for (final candidate in candidates) {
           final adapter = AgentRegistry.detect(candidate.command);
           if (adapter != null) {
             found = adapter;
@@ -205,6 +227,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         agentPaneId: pane?.id,
         agentPanePath: pane?.path,
         agentPaneLabel: pane == null || pane.label.isEmpty ? null : pane.label,
+        detectDetail: detail.isEmpty ? null : detail.toString(),
         config: config,
         isBusy: false,
         error: found == null && paneId != null
