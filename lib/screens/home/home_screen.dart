@@ -6,14 +6,13 @@ import '../connections/connections_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../keys/keys_screen.dart';
 import '../notifications/notification_panes_screen.dart';
-import '../remote_ui/remote_ui_screen.dart';
 import '../settings/settings_screen.dart';
 
 import 'widgets/home_bottom_nav_bar.dart';
 
 /// ホーム画面（Bottom Navigation付き）。
 ///
-/// タブ順序: Servers | Keys | [Dashboard] | Notify | Settings | Agent。
+/// タブ順序: Servers | Keys | [Dashboard] | Notify | Settings。
 /// タブ状態は中立モジュール `lib/navigation/current_tab_provider.dart`、
 /// ボトムナビの表示は [HomeBottomNavBar]（props 受け取りの表示専用）
 /// へ委譲する合成ルート（画面の状態・UI 詳細は持たない）。
@@ -33,7 +32,6 @@ class HomeScreen extends ConsumerWidget {
           DashboardScreen(), // 2: Dashboard（中央）
           NotificationPanesScreen(), // 3: Alerts
           SettingsScreen(), // 4: Settings
-          RemoteUiScreen(), // 5: Agent (Remote UI)
         ],
       ),
       bottomNavigationBar: HomeBottomNavBar(

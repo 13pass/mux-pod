@@ -125,6 +125,104 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
 
   /// Connects to the server [connectionId] and detects running agents.
   Future<void> selectServer(String connectionId) async {
+    await _ensureConnected(connectionId);
+    await refresh();
+  }
+
+  /// Opens the agent console for one specific pane: connects to
+  /// [connectionId] if needed, resolves the agent running in [paneId]
+  /// (or falls back to the first detected agent pane when null), and
+  /// points the state at it.
+  Future<void> openPane(String connectionId, String? paneId) async {
+    await _ensureConnected(connectionId);
+    if (state.connectionId != connectionId) return;
+
+    state = state.copyWith(isBusy: true, error: null, notice: null);
+    try {
+      final paneIO = _paneIO;
+      final transport = _transport;
+      if (paneIO == null || transport == null) {
+        state = state.copyWith(isBusy: false);
+        return;
+      }
+
+      AgentAdapter? found;
+      AgentPaneInfo? pane;
+      if (paneId != null) {
+        pane = await paneIO.paneInfoById(paneId);
+        found = pane == null ? null : AgentRegistry.detect(pane.command);
+      }
+      if (found == null) {
+        // Fall back to the first pane running a known agent.
+        for (final candidate in await paneIO.listPanes()) {
+          final adapter = AgentRegistry.detect(candidate.command);
+          if (adapter != null) {
+            found = adapter;
+            pane = candidate;
+            break;
+          }
+        }
+      }
+
+      var config = const AgentConfig();
+      if (found != null && pane != null) {
+        config = await found.readConfig(
+          AgentContext(
+            ssh: transport,
+            paneIO: paneIO,
+            paneId: pane.id,
+            paneWorkingDirectory: pane.path,
+          ),
+        );
+      }
+
+      state = state.copyWith(
+        agent: found,
+        agentPaneId: pane?.id,
+        agentPanePath: pane?.path,
+        config: config,
+        isBusy: false,
+        error: found == null && paneId != null
+            ? 'No AI agent detected in pane $paneId'
+            : null,
+      );
+    } on Object catch (e) {
+      state = state.copyWith(isBusy: false, error: '$e');
+    }
+  }
+
+  /// Detects which of [paneIds] run a known AI agent. Used by the
+  /// terminal's pane sheet to badge agent panes. Connects to
+  /// [connectionId] with the Remote UI's dedicated connection if needed.
+  Future<Map<String, AgentKind>> agentsForPanes(
+    String connectionId,
+    List<String> paneIds,
+  ) async {
+    final result = <String, AgentKind>{};
+    if (paneIds.isEmpty) return result;
+    await _ensureConnected(connectionId);
+    final paneIO = _paneIO;
+    if (paneIO == null || state.connectionId != connectionId) return result;
+    for (final paneId in paneIds) {
+      try {
+        final info = await paneIO.paneInfoById(paneId);
+        final adapter = AgentRegistry.detect(info?.command);
+        if (adapter != null) result[paneId] = adapter.kind;
+      } on Object {
+        // A vanished pane must not abort the remaining lookups.
+      }
+    }
+    return result;
+  }
+
+  /// Connects to [connectionId] (reusing the connection when already
+  /// active) and installs the backend-aware [PaneIO].
+  Future<void> _ensureConnected(String connectionId) async {
+    if (_client != null &&
+        _client!.isConnected &&
+        state.connectionId == connectionId) {
+      return;
+    }
     final connection = ref.read(connectionsProvider.notifier).getById(connectionId);
     if (connection == null) return;
 
@@ -176,7 +274,6 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         isConnecting: false,
         isConnected: true,
       );
-      await refresh();
     } on Object catch (e) {
       await client.disconnect();
       state = state.copyWith(

@@ -3,7 +3,10 @@ import 'package:flutter_muxpod/l10n/app_localizations.dart';
 import 'package:flutter_muxpod/screens/home/widgets/home_bottom_nav_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Widget _buildApp({required int currentTab, required void Function(int) onSelectTab}) {
+Widget _buildApp({
+  required int currentTab,
+  required void Function(int) onSelectTab,
+}) {
   return MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
@@ -18,34 +21,28 @@ Widget _buildApp({required int currentTab, required void Function(int) onSelectT
 }
 
 void main() {
-  testWidgets('bottom nav shows six entries including Agent (index 5)',
+  testWidgets('bottom nav shows the five tabs of the stock design',
       (tester) async {
     var selected = -1;
-    await tester.pumpWidget(_buildApp(currentTab: 2, onSelectTab: (i) => selected = i));
+    await tester.pumpWidget(
+      _buildApp(currentTab: 2, onSelectTab: (i) => selected = i),
+    );
 
-    // All six labels are rendered, evenly, with no overlay button
-    // stealing taps (en locale default in tests).
     expect(find.text('Servers'), findsOneWidget);
     expect(find.text('Keys'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Notify'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Agent'), findsOneWidget);
-    expect(find.byKey(const Key('home_nav_agent')), findsOneWidget);
+    // The Agent tab was removed: agents are reached from the terminal now.
+    expect(find.text('Agent'), findsNothing);
 
-    await tester.tap(find.byKey(const Key('home_nav_agent')));
-    expect(selected, 5);
-    await tester.tap(find.text('Dashboard'));
+    // The protruding center Dashboard button selects index 2 without a
+    // label.
+    await tester.tap(find.byIcon(Icons.terminal));
     expect(selected, 2);
-  });
 
-  testWidgets('tapping Servers/Keys/Notify/Settings selects their indices',
-      (tester) async {
-    final selected = <int>[];
-    await tester.pumpWidget(_buildApp(currentTab: 0, onSelectTab: selected.add));
     await tester.tap(find.text('Keys'));
     await tester.tap(find.text('Notify'));
     await tester.tap(find.text('Settings'));
-    expect(selected, [1, 3, 4]);
+    expect(selected, 4);
   });
 }

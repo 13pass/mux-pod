@@ -202,6 +202,9 @@ class HerdrController implements HerdrHost {
   String? get sessionId => env.sessionId();
 
   @override
+  String? get connectionId => env.connectionId();
+
+  @override
   String? get workspaceLabel => env.workspaceLabel();
 
   @override

@@ -14,7 +14,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../navigation/current_tab_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -52,6 +51,7 @@ import 'selector_launch.dart' show SelectorLaunchActions;
 import 'selector_sheet.dart' show SelectorContext;
 import 'terminal_reconnect_panel.dart' show TerminalReconnectPanel;
 import 'terminal_screen_access_impl.dart' show TerminalScreenAccessImpl;
+import '../remote_ui/agent_pane_console_screen.dart';
 import 'terminal_menu.dart' show TerminalMenu;
 import 'terminal_root_bindings.dart' show TerminalScreenAdapter;
 import 'terminal_view_shell.dart' show TerminalViewShell;
@@ -540,10 +540,17 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         onOpenSettings: () => Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
-        onOpenAgentTab: () {
-          // ターミナルを閉じてホームの Agent タブ（Remote UI）へ
-          Navigator.of(context).pop();
-          ref.read(currentTabProvider.notifier).setTab(5);
+        onOpenAgentChat: () {
+          // ターミナルはそのままに、フォーカス中ペインのエージェント
+          // コンソールを重ねて開く（閉じれば元のターミナルに戻る）。
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AgentPaneConsoleScreen(
+                connectionId: widget.connectionId,
+                paneId: ref.read(tmuxProvider).activePaneId,
+              ),
+            ),
+          );
         },
         onDisconnect: () =>
             _adapter.connection.showDisconnectConfirmation(context),

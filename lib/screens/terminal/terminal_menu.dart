@@ -31,7 +31,7 @@ class TerminalMenu {
     required VoidCallback onEnterSelectMode,
     required VoidCallback onResetZoom,
     required VoidCallback onOpenSettings,
-    required VoidCallback onOpenAgentTab,
+    required VoidCallback onOpenAgentChat,
     required VoidCallback onDisconnect,
     required VoidCallback onSheetClosed,
   }) {
@@ -171,20 +171,20 @@ class TerminalMenu {
                 height: 1,
                 color: isDark ? const Color(0xFF2A2B36) : Colors.grey.shade300,
               ),
-              // Agent タブ（Remote UI）へ
+              // このペインのエージェントとのチャット（AgentPaneConsoleScreen）へ
               ListTile(
                 leading: Icon(Icons.smart_toy_outlined, color: inactiveIconColor),
                 title: Text(
-                  context.l10n.termAgentRemoteUi,
+                  context.l10n.termAgentChat,
                   style: TextStyle(color: textColor),
                 ),
                 subtitle: Text(
-                  context.l10n.termAgentRemoteUiSubtitle,
+                  context.l10n.termAgentChatSubtitle,
                   style: TextStyle(color: mutedTextColor, fontSize: 12),
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  onOpenAgentTab();
+                  onOpenAgentChat();
                 },
               ),
               Divider(

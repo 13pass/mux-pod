@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../l10n/l10n_ext.dart';
+import '../../../providers/remote_ui_provider.dart';
+import '../../../services/agent/agent_types.dart';
 import '../../../services/backend/domain/multiplexer_backend.dart';
 import '../../../services/backend/domain/multiplexer_session.dart';
 import '../../../services/backend/domain/multiplexer_window.dart';
 import '../../../services/backend/domain/pane_writer.dart';
+import '../../remote_ui/agent_pane_console_screen.dart';
 import 'herdr_selectors_commit.dart';
 import 'herdr_sync.dart';
 import 'herdr_types.dart';
@@ -155,6 +158,24 @@ class HerdrSelectorPresenter {
         final canResize = _host.can(const PaneCapabilities(resize: true));
         final canClose = _host.can(const PaneCapabilities(close: true));
         final canSplit = _host.can(const PaneCapabilities(split: true));
+
+        // AI エージェント検出（pane バッジ + Agent console 導線）。
+        // 失敗してもシートは出す（バッジが無いだけで致命的ではない）。
+        final connectionId = _host.connectionId;
+        Map<String, AgentKind> agentPanes = const {};
+        if (connectionId != null) {
+          try {
+            agentPanes = await _host.ref
+                .read(remoteUiProvider.notifier)
+                .agentsForPanes(
+                  connectionId,
+                  [for (final p in window.panes) p.id],
+                );
+          } on Object {
+            agentPanes = const {};
+          }
+        }
+
         return HerdrSheetContent(
           headerActions: [
             if (canResize)
@@ -189,6 +210,23 @@ class HerdrSelectorPresenter {
                 pane: pane,
                 title: herdrPaneLabel(pane, l10n),
                 isActive: pane.id == _host.paneId,
+                isAgent: agentPanes.containsKey(pane.id),
+                onAgentChat: connectionId != null &&
+                        agentPanes.containsKey(pane.id)
+                    ? () {
+                        Navigator.pop(_host.context);
+                        if (!_host.isMounted || _host.isDisposed) return;
+                        Navigator.of(_host.context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AgentPaneConsoleScreen(
+                              connectionId: connectionId,
+                              paneId: pane.id,
+                              paneTitle: herdrPaneLabel(pane, l10n),
+                            ),
+                          ),
+                        );
+                      }
+                    : null,
                 onTap: () {
                   Navigator.pop(_host.context);
                   _commit.selectPane(sessions, workspace, pane);

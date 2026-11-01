@@ -153,6 +153,14 @@ class FakePaneIO implements PaneIO {
   Future<List<AgentPaneInfo>> listPanes() async => panes;
 
   @override
+  Future<AgentPaneInfo?> paneInfoById(String paneId) async {
+    for (final pane in panes) {
+      if (pane.id == paneId) return pane;
+    }
+    return null;
+  }
+
+  @override
   Future<String?> currentCommand(String paneId) async {
     calls.add('currentCommand $paneId');
     return currentCommandValue;

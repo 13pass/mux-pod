@@ -163,6 +163,12 @@ class MultiplexerPaneTile extends StatelessWidget {
   final VoidCallback? onResize;
   final VoidCallback? onClose;
 
+  /// このペインで AI エージェントが検出されたか（ロボットバッジ表示）。
+  final bool isAgent;
+
+  /// Agent console を開く（null ならメニューに出さない）。
+  final VoidCallback? onAgentChat;
+
   const MultiplexerPaneTile({
     super.key,
     required this.pane,
@@ -173,6 +179,8 @@ class MultiplexerPaneTile extends StatelessWidget {
     this.onLongPress,
     this.onResize,
     this.onClose,
+    this.isAgent = false,
+    this.onAgentChat,
   });
 
   @override
@@ -181,32 +189,59 @@ class MultiplexerPaneTile extends StatelessWidget {
 
     return ActiveListTile(
       isActive: isActive,
-      leading: Container(
+      leading: SizedBox(
         width: 32,
         height: 32,
-        decoration: BoxDecoration(
-          color: isActive
-              ? colorScheme.primary.withValues(alpha: 0.2)
-              : colorScheme.onSurface.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isActive
-                ? colorScheme.primary.withValues(alpha: 0.5)
-                : colorScheme.onSurface.withValues(alpha: 0.1),
-          ),
-        ),
-        child: Center(
-          child: Text(
-            '${pane.index}',
-            style: TextStyle(
-              fontFamily: 'JetBrains Mono',
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: isActive
-                  ? colorScheme.primary
-                  : colorScheme.onSurface.withValues(alpha: 0.6),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: isActive
+                    ? colorScheme.primary.withValues(alpha: 0.2)
+                    : colorScheme.onSurface.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isActive
+                      ? colorScheme.primary.withValues(alpha: 0.5)
+                      : colorScheme.onSurface.withValues(alpha: 0.1),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  '${pane.index}',
+                  style: TextStyle(
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: isActive
+                        ? colorScheme.primary
+                        : colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
             ),
-          ),
+            // AI エージェント検出バッジ（agent console への導線）。
+            if (isAgent)
+              Positioned(
+                right: -4,
+                top: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.smart_toy,
+                    size: 10,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
       title: paneTitle,
@@ -214,7 +249,7 @@ class MultiplexerPaneTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (onResize != null || onClose != null)
+          if (onAgentChat != null || onResize != null || onClose != null)
             PopupMenuButton<String>(
               icon: Icon(
                 Icons.more_vert,
@@ -223,6 +258,21 @@ class MultiplexerPaneTile extends StatelessWidget {
               ),
               padding: EdgeInsets.zero,
               itemBuilder: (menuContext) => [
+                if (onAgentChat != null)
+                  PopupMenuItem(
+                    value: 'agent-chat',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.smart_toy_outlined,
+                          size: 18,
+                          color: colorScheme.onSurface,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(context.l10n.termAgentChat),
+                      ],
+                    ),
+                  ),
                 if (onResize != null)
                   PopupMenuItem(
                     value: 'resize',
@@ -254,7 +304,9 @@ class MultiplexerPaneTile extends StatelessWidget {
                   ),
               ],
               onSelected: (value) {
-                if (value == 'resize') {
+                if (value == 'agent-chat') {
+                  onAgentChat?.call();
+                } else if (value == 'resize') {
                   onResize?.call();
                 } else if (value == 'close') {
                   onClose?.call();

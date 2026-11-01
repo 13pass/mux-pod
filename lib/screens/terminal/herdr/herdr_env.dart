@@ -23,6 +23,7 @@ class HerdrEnv {
     required this.paneWriter,
     required this.sessionId,
     required this.workspaceLabel,
+    this.connectionId = _noConnectionId,
     required this.initialPaneId,
     required this.lastPaneId,
     required this.clock,
@@ -70,6 +71,12 @@ class HerdrEnv {
   final PaneWriter? Function() paneWriter;
 
   final String? Function() sessionId;
+
+  /// ターミナルが接続中の connectionId（Agent console 用・未接続なら null）。
+  final String? Function() connectionId;
+
+  /// [connectionId] の既定値（旧テスト環境互換・常に null）。
+  static String? _noConnectionId() => null;
 
   final String? Function() workspaceLabel;
 

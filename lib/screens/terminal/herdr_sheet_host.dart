@@ -92,6 +92,8 @@ class HerdrSheetHostImpl implements HerdrSheetHost {
         onLongPress: tile.onLongPress,
         onResize: tile.onResize,
         onClose: tile.onClose,
+        isAgent: tile.isAgent,
+        onAgentChat: tile.onAgentChat,
       );
     }
     final primary = Theme.of(contextOf()).colorScheme.primary;

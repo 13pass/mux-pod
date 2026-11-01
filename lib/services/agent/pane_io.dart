@@ -37,6 +37,9 @@ abstract class PaneIO {
   /// process name and working directory.
   Future<List<AgentPaneInfo>> listPanes();
 
+  /// Info for a single [paneId], null when it no longer exists.
+  Future<AgentPaneInfo?> paneInfoById(String paneId);
+
   /// Current foreground process name of [paneId], null when unknown.
   Future<String?> currentCommand(String paneId);
 
@@ -93,6 +96,14 @@ class TmuxPaneIO implements PaneIO {
       }
     }
     return panes;
+  }
+
+  @override
+  Future<AgentPaneInfo?> paneInfoById(String paneId) async {
+    for (final pane in await listPanes()) {
+      if (pane.id == paneId) return pane;
+    }
+    return null;
   }
 
   @override
@@ -184,6 +195,14 @@ class HerdrPaneIO implements PaneIO {
       );
     }
     return panes;
+  }
+
+  @override
+  Future<AgentPaneInfo?> paneInfoById(String paneId) async {
+    for (final pane in await listPanes()) {
+      if (pane.id == paneId) return pane;
+    }
+    return null;
   }
 
   @override

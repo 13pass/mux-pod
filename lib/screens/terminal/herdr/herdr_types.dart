@@ -214,6 +214,9 @@ abstract interface class HerdrHost {
   /// 接続設定（widget props）。
   String? get sessionId;
 
+  /// 接続中の connectionId（Agent console のスコープ用）。
+  String? get connectionId;
+
   String? get workspaceLabel;
 
   String? get initialPaneId;
@@ -346,6 +349,8 @@ class HerdrSheetTile {
     this.onClose,
     this.onResize,
     this.onLongPress,
+    this.isAgent = false,
+    this.onAgentChat,
   });
 
   final Key key;
@@ -367,6 +372,12 @@ class HerdrSheetTile {
   final VoidCallback? onClose;
   final VoidCallback? onResize;
   final VoidCallback? onLongPress;
+
+  /// このペインで AI エージェントが検出されたか（Agent console 導線）。
+  final bool isAgent;
+
+  /// Agent console を開くコールバック（非 agent ペインでは null）。
+  final VoidCallback? onAgentChat;
 }
 
 /// ラベル入力ダイアログ（ui の HerdrLabelInputDialog）の引数。

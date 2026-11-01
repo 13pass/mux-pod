@@ -177,6 +177,7 @@ class TerminalScreenAdapter implements TerminalPortSource {
         can: (required) => runtime.can(required),
         paneWriter: () => runtime.paneWriter,
         sessionId: () => access.sessionId,
+        connectionId: () => access.connectionId,
         workspaceLabel: () => access.sessionName,
         initialPaneId: () => access.initialPaneId,
         lastPaneId: () => access.lastPaneId,

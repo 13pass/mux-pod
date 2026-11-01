@@ -639,8 +639,6 @@
       }
     }
   },
-  "homeDashboard": "Dashboard",
-  "homeAgent": "Agent",
   "homeServers": "Servers",
   "homeKeys": "Keys",
   "homeNotify": "Notify",
@@ -849,8 +847,8 @@
     }
   },
   "termPinchToZoom": "Pinch to zoom in/out",
-  "termAgentRemoteUi": "Agent (Remote UI)",
-  "termAgentRemoteUiSubtitle": "Control the AI agent in this pane from a chat UI",
+  "termAgentChat": "Agent chat",
+  "termAgentChatSubtitle": "Talk to the AI agent running in this pane",
   "termSettings": "Settings",
   "termSettingsSubtitle": "Font, theme, and other options",
   "termDisconnect": "Disconnect",
