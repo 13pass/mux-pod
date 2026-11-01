@@ -161,21 +161,27 @@ void main() {
       expect(find.text('Workspace'), findsOneWidget);
       expect(find.text('Worktree'), findsOneWidget);
       expect(find.byKey(const Key('remote_ui.agent_picker')), findsOneWidget);
+      // No server selected: composer/chips are hidden, only the empty state.
+      expect(find.byKey(const Key('remote_ui.composer')), findsNothing);
       expect(find.text('New chat'), findsOneWidget);
 
-      // No mockup placeholder model names; the default label is "Auto".
-      expect(find.text('Auto'), findsOneWidget);
+      // No mockup placeholder model names; with no server the chips are
+      // hidden along with the composer.
+      expect(find.text('Auto'), findsNothing);
       expect(find.text('GPT-5.6-Sol'), findsNothing);
 
       // The mic button was removed (no backend exists).
       expect(find.byIcon(Icons.mic_none_outlined), findsNothing);
-      expect(find.byKey(const Key('remote_ui.send_button')), findsOneWidget);
+      expect(find.byKey(const Key('remote_ui.send_button')), findsNothing);
     });
 
     testWidgets('chips open sheets and reflect the pending config selection',
         (tester) async {
       final chat = _FakeRemoteUiChatNotifier(const RemoteUiChatState());
-      await tester.pumpWidget(_buildApp(chat));
+      final remote = _FixedRemoteUiNotifier(
+        const RemoteUiState(connectionId: 'c1', isConnected: true),
+      );
+      await tester.pumpWidget(_buildApp(chat, remote: remote));
       await tester.pumpAndSettle();
 
       // Model + intelligence chip.
@@ -277,7 +283,10 @@ void main() {
     testWidgets('sending a message calls the chat provider and clears field',
         (tester) async {
       final chat = _FakeRemoteUiChatNotifier(const RemoteUiChatState());
-      await tester.pumpWidget(_buildApp(chat));
+      final remote = _FixedRemoteUiNotifier(
+        const RemoteUiState(connectionId: 'c1', isConnected: true),
+      );
+      await tester.pumpWidget(_buildApp(chat, remote: remote));
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -307,7 +316,10 @@ void main() {
           isStreaming: true,
         ),
       );
-      await tester.pumpWidget(_buildApp(chat));
+      final remote = _FixedRemoteUiNotifier(
+        const RemoteUiState(connectionId: 'c1', isConnected: true),
+      );
+      await tester.pumpWidget(_buildApp(chat, remote: remote));
       // No pumpAndSettle here: the streaming cursor blinks on a timer.
       await tester.pump();
 
@@ -426,7 +438,10 @@ void main() {
     testWidgets('plus menu toggles plan mode; upload without server hints',
         (tester) async {
       final chat = _FakeRemoteUiChatNotifier(const RemoteUiChatState());
-      await tester.pumpWidget(_buildApp(chat));
+      final remote = _FixedRemoteUiNotifier(
+        const RemoteUiState(connectionId: 'c1', isConnected: true),
+      );
+      await tester.pumpWidget(_buildApp(chat, remote: remote));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('remote_ui.plus_button')));

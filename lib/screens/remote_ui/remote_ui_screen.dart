@@ -143,13 +143,16 @@ class _RemoteUiScreenState extends ConsumerState<RemoteUiScreen> {
                       targetLabel: targetLabel,
                     ),
             ),
-            _buildComposer(
-              context,
-              chat: chat,
-              config: effectiveConfig,
-              showPermissionChip: capabilities.permissionLevels.isNotEmpty,
-              borderColor: border,
-            ),
+            // Chips + composer only make sense once a server is selected;
+            // before that the empty state (server picker) is the whole UI.
+            if (remote.connectionId != null)
+              _buildComposer(
+                context,
+                chat: chat,
+                config: effectiveConfig,
+                showPermissionChip: capabilities.permissionLevels.isNotEmpty,
+                borderColor: border,
+              ),
           ],
         ),
       ),
