@@ -543,14 +543,6 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     }
   }
 
-  /// Applies a model switch to the detected live-pane agent.
-  Future<void> applyModel(String model) =>
-      _apply((adapter, context) => adapter.applyModel(context, model));
-
-  /// Applies a reasoning-effort change to the detected live-pane agent.
-  Future<void> applyIntelligence(UnifiedIntelligence level) =>
-      _apply((adapter, context) => adapter.applyIntelligence(context, level));
-
   /// Toggles plan/spec mode on the detected live-pane agent.
   Future<void> setPlanMode(bool enabled) =>
       _apply((adapter, context) => adapter.setPlanMode(context, enabled));

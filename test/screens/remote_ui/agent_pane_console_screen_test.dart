@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_muxpod/providers/remote_ui_provider.dart';
 import 'package:flutter_muxpod/screens/remote_ui/agent_pane_console_screen.dart';
-import 'package:flutter_muxpod/services/agent/agent_types.dart';
 import 'package:flutter_muxpod/services/agent/claude_code_adapter.dart';
 import 'package:flutter_muxpod/services/agent/pane_io.dart';
 import 'package:flutter_muxpod/services/agent/vibe_adapter.dart';
@@ -33,11 +32,6 @@ class _FixedRemoteUiNotifier extends RemoteUiNotifier {
   }
 
   @override
-  @override
-  Future<void> applyModel(String model) async {
-    calls.add('applyModel($model)');
-  }
-
   @override
   void clearMessages() {}
 }
@@ -85,7 +79,6 @@ void main() {
         agent: VibeAdapter(),
         agentPaneId: 'w5:p3',
         agentPanePath: '/home/vincent/agents/vibe',
-        config: const AgentConfig(model: 'mistral-large-4-0-3'),
       ),
     );
     await tester.pumpWidget(_buildApp(remote));
@@ -94,9 +87,13 @@ void main() {
     expect(find.text('Vibe'), findsOneWidget);
     expect(find.textContaining('w5:p3'), findsWidgets);
     expect(remote.calls.first, 'openPane(c1, w5:p3)');
-    // Chips + composer visible for a detected agent.
+    // Composer visible for a detected agent; no model/permission chips.
+    expect(find.byKey(const Key('agent_console.model_chip')), findsNothing);
+    expect(
+      find.byKey(const Key('agent_console.permission_chip')),
+      findsNothing,
+    );
     expect(find.byKey(const Key('agent_console.composer')), findsOneWidget);
-    expect(find.textContaining('mistral-large-4-0-3'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const Key('agent_console.composer')),

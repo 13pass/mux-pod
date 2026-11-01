@@ -4,11 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/remote_ui_provider.dart';
-import '../../services/agent/agent_adapter.dart';
-import '../../services/agent/agent_types.dart';
 import '../../services/agent/pane_io.dart';
 import '../../theme/design_colors.dart';
-import 'remote_ui_model_intelligence_sheet.dart';
 
 /// Full-screen agent console for ONE multiplexer pane, pushed on top of
 /// the terminal.
@@ -48,7 +45,6 @@ class _AgentPaneConsoleScreenState
     extends ConsumerState<AgentPaneConsoleScreen> {
   static const _sendButtonKey = Key('agent_console.send_button');
   static const _composerKey = Key('agent_console.composer');
-  static const _modelChipKey = Key('agent_console.model_chip');
 
   final _composerController = TextEditingController();
   final _contentScrollController = ScrollController();
@@ -202,7 +198,7 @@ class _AgentPaneConsoleScreenState
                       ],
                     ),
             ),
-            if (agent != null) _buildComposer(context, remote, agent, border),
+            if (agent != null) _buildComposer(context, remote, border),
           ],
         ),
       ),
@@ -425,7 +421,6 @@ class _AgentPaneConsoleScreenState
   Widget _buildComposer(
     BuildContext context,
     RemoteUiState remote,
-    AgentAdapter agent,
     Color border,
   ) {
     return Container(
@@ -435,24 +430,7 @@ class _AgentPaneConsoleScreenState
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              // The model sheet also accepts free-text model names
-              // (availableModels is a convenience list, not an allowlist).
-              //
-              // No permission control here on purpose: the agent keeps
-              // the permissions of its own server-side config; managing
-              // them from the phone is out of scope for the console.
-              _PillChip(
-                key: _modelChipKey,
-                label: _modelChipLabel(remote.config),
-                icon: Icons.auto_awesome,
-                onTap: _openModelSheet,
-              ),
-              const Spacer(),
-            ],
-          ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           Row(
             children: [
               Expanded(
@@ -481,34 +459,6 @@ class _AgentPaneConsoleScreenState
         ],
       ),
     );
-  }
-
-  String _modelChipLabel(AgentConfig config) {
-    final model = config.model ?? 'Auto';
-    final intelligence = config.intelligence;
-    return intelligence == null ? model : '$model ${intelligence.label}';
-  }
-
-  Future<void> _openModelSheet() async {
-    final remote = ref.read(remoteUiProvider);
-    final agent = remote.agent;
-    if (agent == null) return;
-    final result = await RemoteUiModelIntelligenceSheet.show(
-      context,
-      selectedModel: remote.config.model,
-      selectedIntelligence: remote.config.intelligence,
-      intelligenceLevels: agent.capabilities.intelligenceLevels,
-      availableModels: agent.capabilities.availableModels,
-    );
-    if (!mounted || result == null) return;
-    final notifier = ref.read(remoteUiProvider.notifier);
-    if (result.model != null && result.model != remote.config.model) {
-      await notifier.applyModel(result.model!);
-    }
-    if (result.intelligence != null &&
-        result.intelligence != remote.config.intelligence) {
-      await notifier.applyIntelligence(result.intelligence!);
-    }
   }
 
   void _send() {
@@ -585,49 +535,6 @@ class _AgentChip extends StatelessWidget {
               detected.adapter.kind.displayName,
               style: TextStyle(fontSize: 10, color: theme.hintColor),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PillChip extends StatelessWidget {
-  const _PillChip({
-    super.key,
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final border = isDark ? DesignColors.borderDark : DesignColors.borderLight;
-    final fg = isDark
-        ? DesignColors.textPrimary
-        : DesignColors.textPrimaryLight;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: fg),
-            const SizedBox(width: 5),
-            Text(label, style: TextStyle(fontSize: 12, color: fg)),
-            const SizedBox(width: 3),
-            Icon(Icons.expand_more, size: 13, color: fg),
           ],
         ),
       ),
