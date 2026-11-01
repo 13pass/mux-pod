@@ -44,7 +44,8 @@ class AgentPaneConsoleScreen extends ConsumerStatefulWidget {
       _AgentPaneConsoleScreenState();
 }
 
-class _AgentPaneConsoleScreenState extends ConsumerState<AgentPaneConsoleScreen> {
+class _AgentPaneConsoleScreenState
+    extends ConsumerState<AgentPaneConsoleScreen> {
   static const _sendButtonKey = Key('agent_console.send_button');
   static const _composerKey = Key('agent_console.composer');
   static const _permissionChipKey = Key('agent_console.permission_chip');
@@ -79,14 +80,14 @@ class _AgentPaneConsoleScreenState extends ConsumerState<AgentPaneConsoleScreen>
       final error = next.error;
       if (!mounted) return;
       if (notice != null && notice.isNotEmpty && notice != prev?.notice) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(notice)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(notice)));
         ref.read(remoteUiProvider.notifier).clearMessages();
       } else if (error != null && error.isNotEmpty && error != prev?.error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
         ref.read(remoteUiProvider.notifier).clearMessages();
       }
     });
@@ -95,10 +96,13 @@ class _AgentPaneConsoleScreenState extends ConsumerState<AgentPaneConsoleScreen>
     final agent = remote.agent;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final border = isDark ? DesignColors.borderDark : DesignColors.borderLight;
-    final textMuted = isDark ? DesignColors.textMuted : DesignColors.textMutedLight;
+    final textMuted = isDark
+        ? DesignColors.textMuted
+        : DesignColors.textMutedLight;
 
     final title = agent?.kind.displayName ?? 'Agent chat';
-    final paneLabel = widget.paneTitle ?? remote.agentPaneId ?? widget.paneId ?? '';
+    final paneLabel =
+        widget.paneTitle ?? remote.agentPaneId ?? widget.paneId ?? '';
 
     return Scaffold(
       appBar: AppBar(
@@ -123,7 +127,10 @@ class _AgentPaneConsoleScreenState extends ConsumerState<AgentPaneConsoleScreen>
             onPressed: () => unawaited(
               ref
                   .read(remoteUiProvider.notifier)
-                  .openPane(widget.connectionId, widget.paneId ?? remote.agentPaneId),
+                  .openPane(
+                    widget.connectionId,
+                    widget.paneId ?? remote.agentPaneId,
+                  ),
             ),
           ),
         ],
@@ -132,13 +139,42 @@ class _AgentPaneConsoleScreenState extends ConsumerState<AgentPaneConsoleScreen>
         child: Column(
           children: [
             Expanded(
-              child: _opening || remote.isConnecting
-                  ? const Center(child: CircularProgressIndicator())
+              child: _opening || remote.isConnecting || remote.isBusy
+                  ? _buildLoading(remote)
                   : _buildStatus(context, remote, textMuted),
             ),
             if (agent != null) _buildComposer(context, remote, agent, border),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Loading area that says WHICH phase is running, so a hang is visible
+  /// in a screenshot instead of an anonymous spinner.
+  Widget _buildLoading(RemoteUiState remote) {
+    final String phase;
+    if (remote.isConnecting) {
+      phase = 'Connecting to the server…';
+    } else if (remote.isBusy) {
+      phase =
+          'Detecting the agent in pane '
+          '${widget.paneId ?? remote.agentPaneId ?? ''}…';
+    } else {
+      phase = 'Opening the agent console…';
+    }
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 12),
+          Text(
+            phase,
+            style: TextStyle(color: Theme.of(context).hintColor),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -159,15 +195,21 @@ class _AgentPaneConsoleScreenState extends ConsumerState<AgentPaneConsoleScreen>
               Icon(Icons.smart_toy_outlined, size: 48, color: textMuted),
               const SizedBox(height: 12),
               Text(
-                remote.error ??
-                    'No AI agent detected in this pane.\n'
-                        'Start an agent (vibe, claude, codex, droid) there '
-                        'and reopen the console.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: textMuted),
+                (remote.error != null && remote.error!.isNotEmpty)
+                    ? remote.error!
+                    : 'No AI agent detected in this pane.\n'
+                          'Start an agent (vibe, claude, codex, droid) there '
+                          'and reopen the console.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: textMuted),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => unawaited(_open()),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
               ),
             ],
           ),
@@ -188,10 +230,9 @@ class _AgentPaneConsoleScreenState extends ConsumerState<AgentPaneConsoleScreen>
                 child: Text(
                   'Live pane ${remote.agentPaneId ?? '-'}'
                   '${remote.agentPanePath != null ? ' · ${remote.agentPanePath}' : ''}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: textMuted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: textMuted),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -201,10 +242,9 @@ class _AgentPaneConsoleScreenState extends ConsumerState<AgentPaneConsoleScreen>
           Text(
             'The composer below types into this pane. '
             'Watch the reply in the terminal.',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: textMuted),
           ),
         ],
       ),
@@ -346,7 +386,9 @@ class _PillChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final border = isDark ? DesignColors.borderDark : DesignColors.borderLight;
-    final fg = isDark ? DesignColors.textPrimary : DesignColors.textPrimaryLight;
+    final fg = isDark
+        ? DesignColors.textPrimary
+        : DesignColors.textPrimaryLight;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),

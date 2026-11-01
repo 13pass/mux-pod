@@ -17,7 +17,10 @@ abstract class AgentTransport {
 
   /// Runs [command] on a fresh ephemeral channel (stdout/stderr separated)
   /// and returns stdout. Throws [SshConnectionError] on failure.
-  Future<String> exec(String command);
+  ///
+  /// [timeout] bounds the whole execution; the default converts a hung
+  /// remote command into an error instead of an infinite wait.
+  Future<String> exec(String command, {Duration? timeout});
 
   /// Runs [command] and returns the full result including the exit code.
   Future<CommandResult> execWithExitCode(String command);
@@ -49,12 +52,13 @@ class SshAgentTransport implements AgentTransport {
   bool get isConnected => _client.isConnected;
 
   @override
-  Future<String> exec(String command) async {
+  Future<String> exec(String command, {Duration? timeout}) async {
     final result = await _client.execute(
       CommandRequest(
         command: command,
         transport: CommandTransportPreference.ephemeralOnly,
         output: CommandOutputRequirement.separatedOutput,
+        timeout: timeout ?? const Duration(seconds: 20),
       ),
     );
     return result.stdout;

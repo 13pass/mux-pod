@@ -94,7 +94,8 @@ class FakeAgentTransport implements AgentTransport {
   }
 
   @override
-  Future<String> exec(String command) async => _emulate(command).stdout;
+  Future<String> exec(String command, {Duration? timeout}) async =>
+      _emulate(command).stdout;
 
   @override
   Future<CommandResult> execWithExitCode(String command) async =>

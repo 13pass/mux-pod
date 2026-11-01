@@ -135,6 +135,11 @@ class TmuxPaneIO implements PaneIO {
 class HerdrPaneIO implements PaneIO {
   HerdrPaneIO(this._transport, {String? herdrBin}) : _herdrBin = herdrBin;
 
+  /// Upper bound for one herdr CLI round trip. herdr commands answer in
+  /// milliseconds on the server; anything slower is a hung channel that
+  /// must surface as an error, not an infinite spinner.
+  static const _execTimeout = Duration(seconds: 15);
+
   final AgentTransport _transport;
   final String? _herdrBin;
   String? _resolvedBin;
@@ -172,7 +177,10 @@ class HerdrPaneIO implements PaneIO {
       return cached.panes;
     }
     final bin = await _bin();
-    final snapshotJson = await _transport.exec('$bin api snapshot');
+    final snapshotJson = await _transport.exec(
+      '$bin api snapshot',
+      timeout: _execTimeout,
+    );
     final decoded = jsonDecode(snapshotJson);
     final result = decoded is Map<String, dynamic> ? resultOf(decoded) : null;
     final snapshot = result is Map<String, dynamic> ? result['snapshot'] : null;
@@ -229,7 +237,10 @@ class HerdrPaneIO implements PaneIO {
     // Pane ids are herdr-generated (`w5:p3`) — safe unquoted, same as
     // [HerdrCommands.paneSendText].
     final bin = await _bin();
-    final out = await _transport.exec('$bin pane process-info --pane $paneId');
+    final out = await _transport.exec(
+      '$bin pane process-info --pane $paneId',
+      timeout: _execTimeout,
+    );
     final decoded = jsonDecode(out);
     final result = decoded is Map<String, dynamic> ? resultOf(decoded) : null;
     final info = result is Map<String, dynamic> ? result['process_info'] : null;
