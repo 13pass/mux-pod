@@ -153,11 +153,15 @@ class _AgentPaneConsoleScreenState
         ? DesignColors.textMuted
         : DesignColors.textMutedLight;
 
-    final title = agent?.kind.displayName ?? 'Agent chat';
-    final paneLabel =
+    // Claude-mobile style: the session title (pane label) is the app
+    // bar title, the agent kind + "Remote control" the subtitle.
+    final sessionTitle =
         (remote.agentPaneLabel != null && remote.agentPaneLabel!.isNotEmpty)
         ? remote.agentPaneLabel!
-        : (widget.paneTitle ?? remote.agentPaneId ?? widget.paneId ?? '');
+        : (widget.paneTitle ?? agent?.kind.displayName ?? 'Agent chat');
+    final subtitle = agent == null
+        ? null
+        : '${agent.kind.displayName} · Remote control';
 
     return Scaffold(
       appBar: AppBar(
@@ -165,11 +169,17 @@ class _AgentPaneConsoleScreenState
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 17)),
-            if (paneLabel.isNotEmpty)
+            Text(
+              sessionTitle,
+              key: const Key('agent_console.title'),
+              style: const TextStyle(fontSize: 16),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (subtitle != null)
               Text(
-                paneLabel,
-                style: TextStyle(fontSize: 12, color: textMuted),
+                subtitle,
+                style: TextStyle(fontSize: 11, color: textMuted),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -208,7 +218,12 @@ class _AgentPaneConsoleScreenState
                         if (remote.isBusy)
                           const LinearProgressIndicator(minHeight: 2),
                         Expanded(
-                          child: _buildStatus(context, remote, textMuted),
+                          child: _buildStatus(
+                            context,
+                            remote,
+                            border,
+                            textMuted,
+                          ),
                         ),
                       ],
                     ),
@@ -305,6 +320,7 @@ class _AgentPaneConsoleScreenState
   Widget _buildStatus(
     BuildContext context,
     RemoteUiState remote,
+    Color border,
     Color textMuted,
   ) {
     final agent = remote.agent;
@@ -367,36 +383,6 @@ class _AgentPaneConsoleScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
-          child: Row(
-            children: [
-              const Icon(Icons.terminal, size: 16),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Live in '
-                  '${(remote.agentPaneLabel != null && remote.agentPaneLabel!.isNotEmpty) ? remote.agentPaneLabel! : (widget.paneTitle ?? 'pane ${remote.agentPaneId ?? '-'}')}'
-                  '${remote.agentPanePath != null ? ' · ${remote.agentPanePath}' : ''}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: textMuted),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                key: const Key('agent_console.content_refresh'),
-                icon: const Icon(Icons.refresh, size: 18),
-                color: textMuted,
-                tooltip: 'Refresh recent output',
-                onPressed: () => unawaited(
-                  ref.read(remoteUiProvider.notifier).readPaneContent(),
-                ),
-              ),
-            ],
-          ),
-        ),
         Expanded(
           child: (remote.paneContent == null || remote.paneContent!.isEmpty)
               ? Center(
@@ -404,7 +390,7 @@ class _AgentPaneConsoleScreenState
                     padding: const EdgeInsets.all(24),
                     child: Text(
                       'No recent output available for this pane yet.\n'
-                      'Tap the refresh icon to retry.',
+                      'The transcript refreshes automatically.',
                       style: Theme.of(
                         context,
                       ).textTheme.bodyMedium?.copyWith(color: textMuted),
@@ -412,18 +398,30 @@ class _AgentPaneConsoleScreenState
                     ),
                   ),
                 )
-              : Scrollbar(
-                  controller: _contentScrollController,
-                  child: SingleChildScrollView(
+              : Padding(
+                  // Terminal-style card: the pane tail reads as a
+                  // conversation transcript inside a rounded surface.
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  child: Scrollbar(
                     controller: _contentScrollController,
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                    child: SelectableText(
-                      key: const Key('agent_console.pane_content'),
-                      remote.paneContent!,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        height: 1.25,
+                    child: SingleChildScrollView(
+                      controller: _contentScrollController,
+                      padding: const EdgeInsets.all(10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: border),
+                        ),
+                        padding: const EdgeInsets.all(10),
+                        child: SelectableText(
+                          key: const Key('agent_console.pane_content'),
+                          remote.paneContent!,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            height: 1.25,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -438,38 +436,74 @@ class _AgentPaneConsoleScreenState
     RemoteUiState remote,
     Color border,
   ) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: border)),
       ),
-      child: Column(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          const SizedBox(height: 2),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  key: _composerKey,
-                  controller: _composerController,
-                  textInputAction: TextInputAction.send,
-                  minLines: 1,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    hintText: 'Message the agent…',
-                    isDense: true,
-                  ),
-                  onSubmitted: (_) => _send(),
+          // "+" menu (Claude-mobile style): remote-control actions.
+          PopupMenuButton<String>(
+            key: const Key('agent_console.plus_menu'),
+            icon: const Icon(Icons.add),
+            tooltip: 'Remote control actions',
+            onSelected: (action) {
+              if (action == 'interrupt') {
+                unawaited(ref.read(remoteUiProvider.notifier).interruptAgent());
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'interrupt',
+                child: Row(
+                  children: [
+                    Icon(Icons.stop_circle_outlined, size: 20),
+                    SizedBox(width: 10),
+                    Text('Interrupt agent (Ctrl+C)'),
+                  ],
                 ),
               ),
-              const SizedBox(width: 4),
-              IconButton(
-                key: _sendButtonKey,
-                onPressed: remote.isBusy ? null : _send,
-                icon: const Icon(Icons.arrow_upward),
-                tooltip: 'Send',
-              ),
             ],
+          ),
+          Expanded(
+            child: TextField(
+              key: _composerKey,
+              controller: _composerController,
+              textInputAction: TextInputAction.send,
+              minLines: 1,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: 'Message the agent…',
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: theme.colorScheme.primary),
+                ),
+              ),
+              onSubmitted: (_) => _send(),
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton.filled(
+            key: _sendButtonKey,
+            onPressed: remote.isBusy ? null : _send,
+            icon: const Icon(Icons.arrow_upward, size: 20),
+            tooltip: 'Send',
           ),
         ],
       ),

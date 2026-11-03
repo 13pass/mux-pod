@@ -525,6 +525,24 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     await openPane(connectionId, state.agentPaneId);
   }
 
+  /// Sends Ctrl+C to the selected agent pane (remote control: stop the
+  /// running turn).
+  Future<void> interruptAgent() async {
+    final paneIO = _paneIO;
+    final paneId = state.agentPaneId;
+    if (paneIO == null || paneId == null) return;
+    state = state.copyWith(isBusy: true, error: null, notice: null);
+    try {
+      await paneIO.pressInterrupt(paneId);
+      state = state.copyWith(
+        isBusy: false,
+        notice: 'Interrupt sent to the agent pane',
+      );
+    } on Object catch (e) {
+      state = state.copyWith(isBusy: false, error: '$e');
+    }
+  }
+
   /// Re-reads the recent terminal output of the selected agent pane
   /// (the last-messages preview in the console). Best effort: failures
   /// keep the previous preview.

@@ -42,22 +42,22 @@ class CodexAdapter extends AgentAdapter {
 
   @override
   AgentCapabilities get capabilities => const AgentCapabilities(
-        // Model IDs vary by provider/config; free-text entry.
-        intelligenceLevels: [
-          UnifiedIntelligence.low,
-          UnifiedIntelligence.medium,
-          UnifiedIntelligence.high,
-          UnifiedIntelligence.extraHigh,
-        ],
-        permissionLevels: [
-          UnifiedPermission.readOnly,
-          UnifiedPermission.defaultPermissions,
-          UnifiedPermission.autoReview,
-          UnifiedPermission.fullAccess,
-          UnifiedPermission.custom,
-        ],
-        requiresRestartToApply: true,
-      );
+    // Model IDs vary by provider/config; free-text entry.
+    intelligenceLevels: [
+      UnifiedIntelligence.low,
+      UnifiedIntelligence.medium,
+      UnifiedIntelligence.high,
+      UnifiedIntelligence.extraHigh,
+    ],
+    permissionLevels: [
+      UnifiedPermission.readOnly,
+      UnifiedPermission.defaultPermissions,
+      UnifiedPermission.autoReview,
+      UnifiedPermission.fullAccess,
+      UnifiedPermission.custom,
+    ],
+    requiresRestartToApply: true,
+  );
 
   // ===== Pure mappings (unit-tested directly) =====
 
@@ -72,8 +72,8 @@ class CodexAdapter extends AgentAdapter {
       UnifiedIntelligence.high => 'high',
       UnifiedIntelligence.extraHigh => 'xhigh',
       _ => throw ArgumentError(
-          'Codex does not support reasoning effort "${level.name}"',
-        ),
+        'Codex does not support reasoning effort "${level.name}"',
+      ),
     };
   }
 
@@ -98,21 +98,21 @@ class CodexAdapter extends AgentAdapter {
   ) {
     return switch (level) {
       UnifiedPermission.readOnly => (
-          sandboxMode: 'read-only',
-          approvalPolicy: null,
-        ),
+        sandboxMode: 'read-only',
+        approvalPolicy: null,
+      ),
       UnifiedPermission.defaultPermissions => (
-          sandboxMode: 'workspace-write',
-          approvalPolicy: 'on-request',
-        ),
+        sandboxMode: 'workspace-write',
+        approvalPolicy: 'on-request',
+      ),
       UnifiedPermission.autoReview => (
-          sandboxMode: 'workspace-write',
-          approvalPolicy: 'on-failure',
-        ),
+        sandboxMode: 'workspace-write',
+        approvalPolicy: 'on-failure',
+      ),
       UnifiedPermission.fullAccess => (
-          sandboxMode: 'danger-full-access',
-          approvalPolicy: 'never',
-        ),
+        sandboxMode: 'danger-full-access',
+        approvalPolicy: 'never',
+      ),
       UnifiedPermission.custom => null,
     };
   }
@@ -128,8 +128,7 @@ class CodexAdapter extends AgentAdapter {
     if (sandboxMode == null) return null;
     return switch ((sandboxMode, approvalPolicy)) {
       ('read-only', _) => UnifiedPermission.readOnly,
-      ('workspace-write', 'on-request') =>
-        UnifiedPermission.defaultPermissions,
+      ('workspace-write', 'on-request') => UnifiedPermission.defaultPermissions,
       ('workspace-write', 'on-failure') => UnifiedPermission.autoReview,
       ('danger-full-access', 'never') => UnifiedPermission.fullAccess,
       _ => UnifiedPermission.custom,
@@ -166,15 +165,23 @@ class CodexAdapter extends AgentAdapter {
     );
     if (content == null) return const AgentConfig();
     final model = AgentConfigService.tomlGetString(content, 'model');
-    final effort =
-        AgentConfigService.tomlGetString(content, 'model_reasoning_effort');
-    final sandboxMode = AgentConfigService.tomlGetString(content, 'sandbox_mode');
-    final approvalPolicy =
-        AgentConfigService.tomlGetString(content, 'approval_policy');
+    final effort = AgentConfigService.tomlGetString(
+      content,
+      'model_reasoning_effort',
+    );
+    final sandboxMode = AgentConfigService.tomlGetString(
+      content,
+      'sandbox_mode',
+    );
+    final approvalPolicy = AgentConfigService.tomlGetString(
+      content,
+      'approval_policy',
+    );
     return AgentConfig(
       model: model,
-      intelligence:
-          effort == null ? null : intelligenceForReasoningEffort(effort),
+      intelligence: effort == null
+          ? null
+          : intelligenceForReasoningEffort(effort),
       permission: permissionForConfig(sandboxMode, approvalPolicy),
     );
   }

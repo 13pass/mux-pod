@@ -45,6 +45,19 @@ void main() {
       expect(scan.target!.pane.id, 'w5:p3');
     });
 
+    test('carries the reported lifecycle status onto the agent', () {
+      final scan = RemoteUiNotifier.scanPanes([
+        const AgentPaneInfo(
+          id: 'w7:p2',
+          command: 'claude',
+          agentStatus: 'idle',
+        ),
+        const AgentPaneInfo(id: 'w5:p3', command: 'vibe'),
+      ], null);
+      expect(scan.agents.first.status, 'idle');
+      expect(scan.agents.last.status, isNull);
+    });
+
     test('targets the requested pane when given', () {
       final scan = RemoteUiNotifier.scanPanes([
         shellPane,

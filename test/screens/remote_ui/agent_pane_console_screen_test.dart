@@ -90,7 +90,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Vibe'), findsOneWidget);
-    expect(find.textContaining('w5:p3'), findsWidgets);
+    // Claude-mobile style app bar: agent kind + Remote control subtitle;
+    // the raw pane id does not appear anywhere in the chat UI.
+    expect(find.textContaining('Remote control'), findsOneWidget);
+    expect(find.textContaining('w5:p3'), findsNothing);
     expect(remote.calls.first, 'openPane(c1, w5:p3)');
     // Composer visible for a detected agent; no model/permission chips.
     expect(find.byKey(const Key('agent_console.model_chip')), findsNothing);

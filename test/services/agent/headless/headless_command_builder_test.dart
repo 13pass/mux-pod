@@ -37,10 +37,7 @@ void main() {
           prompt: 'x',
           workingDirectory: "/home/user's dir",
         );
-        expect(
-          command,
-          startsWith(r"cd '/home/user'\''s dir' && droid exec"),
-        );
+        expect(command, startsWith(r"cd '/home/user'\''s dir' && droid exec"));
       });
 
       test('omits cd when no working directory is given', () {

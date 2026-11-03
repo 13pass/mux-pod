@@ -51,7 +51,7 @@ import 'selector_launch.dart' show SelectorLaunchActions;
 import 'selector_sheet.dart' show SelectorContext;
 import 'terminal_reconnect_panel.dart' show TerminalReconnectPanel;
 import 'terminal_screen_access_impl.dart' show TerminalScreenAccessImpl;
-import '../remote_ui/agent_pane_console_screen.dart';
+import '../remote_ui/agent_sessions_screen.dart';
 import 'terminal_menu.dart' show TerminalMenu;
 import 'terminal_root_bindings.dart' show TerminalScreenAdapter;
 import 'terminal_view_shell.dart' show TerminalViewShell;
@@ -541,14 +541,13 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
           context,
         ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
         onOpenAgentChat: () {
-          // ターミナルはそのままに、フォーカス中ペインのエージェント
-          // コンソールを重ねて開く（閉じれば元のターミナルに戻る）。
+          // Claude-mobile style: land on the sessions list (one card
+          // per detected agent); the focused pane's console opens from
+          // a card tap.
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => AgentPaneConsoleScreen(
-                connectionId: widget.connectionId,
-                paneId: ref.read(tmuxProvider).activePaneId,
-              ),
+              builder: (_) =>
+                  AgentSessionsScreen(connectionId: widget.connectionId),
             ),
           );
         },

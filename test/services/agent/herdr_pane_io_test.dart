@@ -72,8 +72,10 @@ void main() {
       // herdr's own report identifies w5:p4 (its foreground process is a
       // wrapper); no probe was issued for it and the report wins.
       expect(panes[2].command, 'claude');
+      expect(panes[2].agentStatus, 'idle');
       // The herdr-vibe plugin reports Vibe sessions as "mistral-vibe".
       expect(panes[3].command, 'mistral-vibe');
+      expect(panes[3].agentStatus, 'working');
       expect(panes[3].tab, 'gitea');
       // The custom herdr binary path is used (after the test -x probe).
       expect(t.execCommands.first, 'test -x -- /usr/local/bin/herdr');

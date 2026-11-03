@@ -31,6 +31,10 @@ class AgentPaneInfo {
   /// Pane display title (tmux pane title / herdr terminal_title).
   final String? title;
 
+  /// Agent lifecycle state herdr reports for the pane ("working",
+  /// "blocked", "idle"), null when the backend has none (tmux).
+  final String? agentStatus;
+
   const AgentPaneInfo({
     required this.id,
     this.command,
@@ -38,6 +42,7 @@ class AgentPaneInfo {
     this.workspace,
     this.tab,
     this.title,
+    this.agentStatus,
   });
 
   /// Human label: workspace, tab and pane title joined with dots, e.g.
@@ -60,6 +65,10 @@ class DetectedAgent {
 
   final AgentPaneInfo pane;
   final AgentAdapter adapter;
+
+  /// Agent lifecycle state the backend reports for this pane
+  /// ("working" | "blocked" | "idle"), null when unknown.
+  String? get status => pane.agentStatus;
 }
 
 /// Strips the huge right padding TUI output carries (full-width status
@@ -272,17 +281,33 @@ class HerdrPaneIO implements PaneIO {
   /// Raw pane entries of the last snapshot, cached for
   /// [_snapshotCacheTtl] so a burst of lookups (badges + one console open)
   /// costs ONE snapshot round trip instead of one per lookup. The
-  /// [agentNames] map carries herdr's own agent report per pane id.
+  /// [agentNames] map carries herdr's own agent report per pane id,
+  /// [agentStatuses] the lifecycle state it reports for each of them.
   static const _snapshotCacheTtl = Duration(seconds: 5);
-  ({List<AgentPaneInfo> panes, Map<String, String> agentNames, DateTime at})?
+  ({
+    List<AgentPaneInfo> panes,
+    Map<String, String> agentNames,
+    Map<String, String> agentStatuses,
+    DateTime at,
+  })?
   _snapshotCache;
 
-  Future<({List<AgentPaneInfo> panes, Map<String, String> agentNames})>
+  Future<
+    ({
+      List<AgentPaneInfo> panes,
+      Map<String, String> agentNames,
+      Map<String, String> agentStatuses,
+    })
+  >
   _snapshotPanes() async {
     final cached = _snapshotCache;
     if (cached != null &&
         DateTime.now().difference(cached.at) < _snapshotCacheTtl) {
-      return (panes: cached.panes, agentNames: cached.agentNames);
+      return (
+        panes: cached.panes,
+        agentNames: cached.agentNames,
+        agentStatuses: cached.agentStatuses,
+      );
     }
     final bin = await _bin();
     // The snapshot is the one irreplacable call (pane enumeration); a
@@ -354,6 +379,7 @@ class HerdrPaneIO implements PaneIO {
         final workspaceId = raw['workspace_id'];
         final tabId = raw['tab_id'];
         final terminalTitle = raw['terminal_title'];
+        final rawStatus = raw['agent_status'];
         panes.add(
           AgentPaneInfo(
             id: paneId,
@@ -365,6 +391,9 @@ class HerdrPaneIO implements PaneIO {
             title: terminalTitle is String && terminalTitle.isNotEmpty
                 ? terminalTitle
                 : null,
+            agentStatus: rawStatus is String && rawStatus != 'unknown'
+                ? rawStatus
+                : null,
           ),
         );
       }
@@ -374,6 +403,7 @@ class HerdrPaneIO implements PaneIO {
     // agents whose foreground process is a wrapper (claude panes run
     // `clawpatrol`).
     final agentNames = <String, String>{};
+    final agentStatuses = <String, String>{};
     if (snapshotObj is Map<String, dynamic>) {
       final agents = snapshotObj['agents'];
       if (agents is List) {
@@ -381,17 +411,25 @@ class HerdrPaneIO implements PaneIO {
           if (a is! Map<String, dynamic>) continue;
           final agentPaneId = a['pane_id'];
           final agentName = a['agent'];
-          if (agentPaneId is String &&
-              agentPaneId.isNotEmpty &&
-              agentName is String &&
-              agentName.isNotEmpty) {
-            agentNames[agentPaneId] = agentName.trim().toLowerCase();
+          if (agentPaneId is String && agentPaneId.isNotEmpty) {
+            if (agentName is String && agentName.isNotEmpty) {
+              agentNames[agentPaneId] = agentName.trim().toLowerCase();
+            }
+            final status = a['agent_status'];
+            if (status is String && status.isNotEmpty) {
+              agentStatuses[agentPaneId] = status;
+            }
           }
         }
       }
     }
-    _snapshotCache = (panes: panes, agentNames: agentNames, at: DateTime.now());
-    return (panes: panes, agentNames: agentNames);
+    _snapshotCache = (
+      panes: panes,
+      agentNames: agentNames,
+      agentStatuses: agentStatuses,
+      at: DateTime.now(),
+    );
+    return (panes: panes, agentNames: agentNames, agentStatuses: agentStatuses);
   }
 
   Future<AgentPaneInfo> _withCommand(AgentPaneInfo pane) async {
@@ -410,6 +448,7 @@ class HerdrPaneIO implements PaneIO {
       workspace: pane.workspace,
       tab: pane.tab,
       title: pane.title,
+      agentStatus: pane.agentStatus,
     );
   }
 
@@ -496,7 +535,11 @@ class HerdrPaneIO implements PaneIO {
         final reported = snapshot.agentNames[pane.id];
         result.add(
           reported != null
-              ? _withReportedAgent(pane, reported)
+              ? _withReportedAgent(
+                  pane,
+                  reported,
+                  snapshot.agentStatuses[pane.id],
+                )
               : await _withCommand(pane),
         );
       }
@@ -512,21 +555,26 @@ class HerdrPaneIO implements PaneIO {
           workspace: pane.workspace,
           tab: pane.tab,
           title: pane.title,
+          agentStatus: snapshot.agentStatuses[pane.id] ?? pane.agentStatus,
         ),
     ];
   }
 
   /// Pane copy carrying herdr's own reported agent as its command (no
   /// process-info probe needed: herdr tracks these sessions itself).
-  AgentPaneInfo _withReportedAgent(AgentPaneInfo pane, String agent) =>
-      AgentPaneInfo(
-        id: pane.id,
-        command: agent,
-        path: pane.path,
-        workspace: pane.workspace,
-        tab: pane.tab,
-        title: pane.title,
-      );
+  AgentPaneInfo _withReportedAgent(
+    AgentPaneInfo pane,
+    String agent,
+    String? status,
+  ) => AgentPaneInfo(
+    id: pane.id,
+    command: agent,
+    path: pane.path,
+    workspace: pane.workspace,
+    tab: pane.tab,
+    title: pane.title,
+    agentStatus: status ?? pane.agentStatus,
+  );
 
   @override
   Future<AgentPaneInfo?> paneInfoById(String paneId) async {
@@ -537,7 +585,13 @@ class HerdrPaneIO implements PaneIO {
     for (final pane in snapshot.panes) {
       if (pane.id != paneId) continue;
       final reported = snapshot.agentNames[paneId];
-      if (reported != null) return _withReportedAgent(pane, reported);
+      if (reported != null) {
+        return _withReportedAgent(
+          pane,
+          reported,
+          snapshot.agentStatuses[paneId],
+        );
+      }
       return _withCommand(pane);
     }
     return null;

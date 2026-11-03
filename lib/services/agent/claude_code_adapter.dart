@@ -45,35 +45,35 @@ class ClaudeCodeAdapter extends AgentAdapter {
 
   @override
   AgentCapabilities get capabilities => const AgentCapabilities(
-        // Common model aliases from docs/en/model-config. The `/model`
-        // command also accepts full model IDs, so this list is a
-        // convenience, not an exhaustive allowlist.
-        availableModels: [
-          'default',
-          'sonnet',
-          'opus',
-          'haiku',
-          'fable',
-          'opusplan',
-        ],
-        // `/effort` low|medium|high|xhigh|max|ultracode.
-        intelligenceLevels: [
-          UnifiedIntelligence.low,
-          UnifiedIntelligence.medium,
-          UnifiedIntelligence.high,
-          UnifiedIntelligence.extraHigh,
-          UnifiedIntelligence.max,
-          UnifiedIntelligence.ultra,
-        ],
-        permissionLevels: [
-          UnifiedPermission.readOnly,
-          UnifiedPermission.defaultPermissions,
-          UnifiedPermission.autoReview,
-          UnifiedPermission.fullAccess,
-          UnifiedPermission.custom,
-        ],
-        supportsPlanMode: true,
-      );
+    // Common model aliases from docs/en/model-config. The `/model`
+    // command also accepts full model IDs, so this list is a
+    // convenience, not an exhaustive allowlist.
+    availableModels: [
+      'default',
+      'sonnet',
+      'opus',
+      'haiku',
+      'fable',
+      'opusplan',
+    ],
+    // `/effort` low|medium|high|xhigh|max|ultracode.
+    intelligenceLevels: [
+      UnifiedIntelligence.low,
+      UnifiedIntelligence.medium,
+      UnifiedIntelligence.high,
+      UnifiedIntelligence.extraHigh,
+      UnifiedIntelligence.max,
+      UnifiedIntelligence.ultra,
+    ],
+    permissionLevels: [
+      UnifiedPermission.readOnly,
+      UnifiedPermission.defaultPermissions,
+      UnifiedPermission.autoReview,
+      UnifiedPermission.fullAccess,
+      UnifiedPermission.custom,
+    ],
+    supportsPlanMode: true,
+  );
 
   // ===== Pure mappings (unit-tested directly) =====
 
@@ -157,8 +157,7 @@ class ClaudeCodeAdapter extends AgentAdapter {
     );
     return AgentConfig(
       model: model is String ? model : null,
-      intelligence:
-          effort is String ? intelligenceForEffort(effort) : null,
+      intelligence: effort is String ? intelligenceForEffort(effort) : null,
       permission: mode is String ? permissionForMode(mode) : null,
       planModeActive: mode == 'plan',
     );
@@ -226,7 +225,7 @@ class ClaudeCodeAdapter extends AgentAdapter {
   ) async {
     final current =
         await AgentConfigService.readRemoteFile(context.ssh, settingsPath) ??
-            '';
+        '';
     final updated = AgentConfigService.jsonSetDotted(current, dottedKey, value);
     await AgentConfigService.writeRemoteFileAtomic(
       context.ssh,
