@@ -432,6 +432,24 @@ void main() {
       );
     });
 
+    test('extractTranscriptLinks finds URLs and trims punctuation', () {
+      expect(extractTranscriptLinks('no url here'), isEmpty);
+      final single = extractTranscriptLinks(
+        'Download: https://share.angou.fr/f/abc123/ today.',
+      );
+      expect(single, hasLength(1));
+      expect(single.single.url, 'https://share.angou.fr/f/abc123/');
+      // The prose around the link is preserved by start/end offsets.
+      final line = 'see (https://example.com/x?y=1) and https://z.io/a, ok?';
+      final links = extractTranscriptLinks(line);
+      expect(links, hasLength(2));
+      expect(links[0].url, 'https://example.com/x?y=1');
+      expect(links[1].url, 'https://z.io/a');
+      for (final link in links) {
+        expect(line.substring(link.start, link.end), link.url);
+      }
+    });
+
     test('forKind maps kinds to profiles', () {
       expect(
         TranscriptRules.forKind(AgentKind.vibe),

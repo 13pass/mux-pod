@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/remote_ui_provider.dart';
 import '../../services/agent/agent_types.dart';
+import '../../utils/external_links.dart';
 import '../../services/agent/pane_io.dart';
 import '../../theme/design_colors.dart';
 
@@ -474,8 +476,9 @@ class _AgentPaneConsoleScreenState
           child: Container(height: 1, color: border.withValues(alpha: 0.7)),
         );
       case TranscriptLineType.user:
-        return Text(
-          line,
+        return _TranscriptLineText(
+          line: line,
+          linkColor: theme.colorScheme.primary,
           style: TextStyle(
             fontFamily: 'monospace',
             fontSize: 12,
@@ -485,8 +488,9 @@ class _AgentPaneConsoleScreenState
           ),
         );
       case TranscriptLineType.activity:
-        return Text(
-          line,
+        return _TranscriptLineText(
+          line: line,
+          linkColor: theme.colorScheme.primary,
           style: TextStyle(
             fontFamily: 'monospace',
             fontSize: 12,
@@ -507,8 +511,9 @@ class _AgentPaneConsoleScreenState
         );
       case TranscriptLineType.body:
         if (line.trim().isEmpty) return const SizedBox(height: 5);
-        return Text(
-          line,
+        return _TranscriptLineText(
+          line: line,
+          linkColor: theme.colorScheme.primary,
           style: const TextStyle(
             fontFamily: 'monospace',
             fontSize: 12,
@@ -752,6 +757,42 @@ class TranscriptRules {
   }
 }
 
+/// One clickable URL inside a transcript line.
+class TranscriptLink {
+  const TranscriptLink({
+    required this.start,
+    required this.end,
+    required this.url,
+  });
+  final int start;
+  final int end;
+  final String url;
+}
+
+final RegExp _transcriptUrlPattern = RegExp(
+  r"https?://[^\s<>']+",
+  caseSensitive: false,
+);
+
+/// Extracts the clickable URLs of one transcript line. Trailing
+/// punctuation (`.`, `)`, `,`, `…`) is left out of the link so prose
+/// like `(https://host/x).` stays tappable without the `.`.
+List<TranscriptLink> extractTranscriptLinks(String line) {
+  final links = <TranscriptLink>[];
+  for (final match in _transcriptUrlPattern.allMatches(line)) {
+    var url = match.group(0)!;
+    var end = match.end;
+    while (url.length > 'https://'.length &&
+        RegExp(r'[).,;:!?…>»·]').hasMatch(url[url.length - 1])) {
+      url = url.substring(0, url.length - 1);
+      end--;
+    }
+    if (url.length <= 'https://'.length) continue;
+    links.add(TranscriptLink(start: match.start, end: end, url: url));
+  }
+  return links;
+}
+
 /// Classifies one raw pane-tail line for the transcript renderer:
 ///
 /// - TUI rules (long runs of box-drawing dashes) render as dividers,
@@ -803,4 +844,101 @@ TranscriptLineType classifyTranscriptLine(
     return TranscriptLineType.chrome;
   }
   return TranscriptLineType.body;
+}
+
+/// One transcript line with clickable URLs: text around each link
+/// renders normally, `https?://…` spans render underlined in the
+/// primary color and open the OS browser (via the app's scheme-guarded
+/// external-link helpers).
+///
+/// Stateful on purpose: the recognizers are created once per line
+/// content (the transcript re-renders every poll tick) and disposed
+/// on change/unmount - creating them per build would leak.
+class _TranscriptLineText extends StatefulWidget {
+  const _TranscriptLineText({
+    required this.line,
+    required this.style,
+    required this.linkColor,
+  });
+
+  final String line;
+  final TextStyle style;
+  final Color linkColor;
+
+  @override
+  State<_TranscriptLineText> createState() => _TranscriptLineTextState();
+}
+
+class _TranscriptLineTextState extends State<_TranscriptLineText> {
+  final _recognizers = <TapGestureRecognizer>[];
+  TextSpan? _span;
+
+  @override
+  void initState() {
+    super.initState();
+    _buildSpan();
+  }
+
+  @override
+  void didUpdateWidget(_TranscriptLineText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.line != widget.line ||
+        oldWidget.style != widget.style ||
+        oldWidget.linkColor != widget.linkColor) {
+      _buildSpan();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeRecognizers();
+    super.dispose();
+  }
+
+  void _disposeRecognizers() {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  void _buildSpan() {
+    _disposeRecognizers();
+    final links = extractTranscriptLinks(widget.line);
+    final linkStyle = widget.style.copyWith(
+      color: widget.linkColor,
+      decoration: TextDecoration.underline,
+      decorationColor: widget.linkColor.withValues(alpha: 0.5),
+    );
+    final children = <InlineSpan>[];
+    var pos = 0;
+    for (final link in links) {
+      if (link.start > pos) {
+        children.add(TextSpan(text: widget.line.substring(pos, link.start)));
+      }
+      final recognizer = TapGestureRecognizer();
+      recognizer.onTap = () => unawaited(_open(link.url));
+      _recognizers.add(recognizer);
+      children.add(
+        TextSpan(text: link.url, style: linkStyle, recognizer: recognizer),
+      );
+      pos = link.end;
+    }
+    if (pos < widget.line.length) {
+      children.add(TextSpan(text: widget.line.substring(pos)));
+    }
+    _span = TextSpan(style: widget.style, children: children);
+  }
+
+  Future<void> _open(String url) async {
+    final uri = tryParseExternalHttpUri(url);
+    if (uri != null) {
+      await launchExternalUri(uri);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(_span!);
+  }
 }
