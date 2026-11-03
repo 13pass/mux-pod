@@ -130,6 +130,14 @@ abstract class PaneIO {
   /// the content cannot be read.
   Future<String> readRecentContent(String paneId, {int lines = 40});
 
+  /// Short tail of every pane in ONE batched call (activity
+  /// detection: a changed tail between two polls means someone typed
+  /// or the agent produced output). Best effort per pane.
+  Future<Map<String, String>> readRecentContents(
+    List<String> paneIds, {
+    int lines = 3,
+  });
+
   /// Types [text] literally into [paneId] (no key interpretation).
   Future<void> typeLiteral(String paneId, String text);
 
@@ -217,6 +225,18 @@ class TmuxPaneIO implements PaneIO {
     } on Object {
       return '';
     }
+  }
+
+  @override
+  Future<Map<String, String>> readRecentContents(
+    List<String> paneIds, {
+    int lines = 3,
+  }) async {
+    final tails = <String, String>{};
+    for (final paneId in paneIds) {
+      tails[paneId] = await readRecentContent(paneId, lines: lines);
+    }
+    return tails;
   }
 
   @override
@@ -746,6 +766,43 @@ class HerdrPaneIO implements PaneIO {
       if (AgentRegistry.detect(entry.name) != null) return entry;
     }
     return picked.first;
+  }
+
+  /// Short tails of many panes in ONE exec (framed markers, same
+  /// pattern as the process-info batch). Used for activity detection.
+  @override
+  Future<Map<String, String>> readRecentContents(
+    List<String> paneIds, {
+    int lines = 3,
+  }) async {
+    final tails = <String, String>{};
+    final safe = paneIds.where((id) => _safePaneId(id)).toList();
+    if (safe.isEmpty) return tails;
+    final bin = await _bin();
+    try {
+      final out = await _transport.execWithExitCode(
+        'for p in ${safe.join(' ')}; do '
+        'printf \'\\n<<<MUXPOD:%s>>>\' "\$p"; '
+        '$bin pane read "\$p" --source recent-unwrapped '
+        '--lines $lines --format text 2>/dev/null; '
+        'done; true',
+        timeout: _execTimeout,
+      );
+      final marker = RegExp(r'<<<MUXPOD:([^>]+)>>>');
+      final matches = marker.allMatches(out.stdout).toList();
+      for (var i = 0; i < matches.length; i++) {
+        final paneId = matches[i].group(1)!.trim();
+        final start = matches[i].end;
+        final end = i + 1 < matches.length
+            ? matches[i + 1].start
+            : out.stdout.length;
+        final body = out.stdout.substring(start, end).trim();
+        tails[paneId] = trimTrailingPadding(body);
+      }
+    } on Object {
+      // Best effort: keep whatever was parsed before the failure.
+    }
+    return tails;
   }
 
   @override

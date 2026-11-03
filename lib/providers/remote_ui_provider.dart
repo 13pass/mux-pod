@@ -178,6 +178,31 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     _paneInteractionMs[paneId] = DateTime.now().millisecondsSinceEpoch;
   }
 
+  /// Last content tail hash per pane (null until first sight) and the
+  /// wall clock of the poll that observed the last CHANGE. One batched
+  /// short read; a changed tail pins the pane's activity to now.
+  final Map<String, ({int hash, int? atMs})> _paneContentHashes = {};
+  final Map<String, int> _contentActivityMs = {};
+
+  Future<void> _observeContentChanges(List<String> paneIds) async {
+    if (paneIds.isEmpty) return;
+    final paneIO = _paneIO;
+    if (paneIO == null) return;
+    final tails = await paneIO.readRecentContents(paneIds);
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    for (final entry in tails.entries) {
+      final hash = entry.value.hashCode;
+      final known = _paneContentHashes[entry.key];
+      if (known == null) {
+        // First sight: the tail's history is unknown.
+        _paneContentHashes[entry.key] = (hash: hash, atMs: null);
+      } else if (known.hash != hash) {
+        _paneContentHashes[entry.key] = (hash: hash, atMs: nowMs);
+        _contentActivityMs[entry.key] = nowMs;
+      }
+    }
+  }
+
   void _observePaneChanges(List<AgentPaneInfo> panes) {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     for (final pane in panes) {
@@ -264,15 +289,28 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       }
 
       final panes = await paneIO.listPanes();
-      // Pin pane changes to the wall clock: when a pane's sequence or
-      // revision moved since the last look, its last activity is NOW
-      // (poll granularity). First sight stays unpinned - the change
-      // happened at some unknown past time.
+      // Pin pane changes to the wall clock: when a pane's sequence,
+      // revision or CONTENT TAIL moved since the last look, its last
+      // activity is NOW (poll granularity). First sight stays unpinned
+      // - the change happened at some unknown past time. The content
+      // check is the one that catches "the user is talking to this
+      // agent" even from the desktop and on unreported panes.
       _observePaneChanges(panes);
+      await _observeContentChanges([
+        for (final pane in panes)
+          if (AgentRegistry.detect(pane.command) != null) pane.id,
+      ]);
       final activity = <String, int>{..._paneInteractionMs};
       for (final entry in _paneChangeClocks.entries) {
         final atMs = entry.value.atMs;
         if (atMs == null) continue;
+        final previous = activity[entry.key];
+        if (previous == null || atMs > previous) {
+          activity[entry.key] = atMs;
+        }
+      }
+      for (final entry in _contentActivityMs.entries) {
+        final atMs = entry.value;
         final previous = activity[entry.key];
         if (previous == null || atMs > previous) {
           activity[entry.key] = atMs;
@@ -619,6 +657,8 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     _ownsClient = false;
     _paneInteractionMs.clear();
     _paneChangeClocks.clear();
+    _paneContentHashes.clear();
+    _contentActivityMs.clear();
     if (client != null) await client.disconnect();
     state = const RemoteUiState();
   }

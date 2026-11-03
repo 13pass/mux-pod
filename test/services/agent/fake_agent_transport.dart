@@ -180,6 +180,15 @@ class FakePaneIO implements PaneIO {
   }
 
   @override
+  Future<Map<String, String>> readRecentContents(
+    List<String> paneIds, {
+    int lines = 3,
+  }) async {
+    calls.add('readRecentContents ${paneIds.length}');
+    return {for (final id in paneIds) id: recentContent};
+  }
+
+  @override
   Future<void> typeLiteral(String paneId, String text) async {
     calls.add('typeLiteral $paneId $text');
   }
