@@ -86,6 +86,31 @@ void main() {
       expect(scan.detail, ' | scan: 1 panes, 1 command(s) resolved');
     });
 
+    test('orders agents by last interaction (sequence) first', () {
+      final scan = RemoteUiNotifier.scanPanes([
+        // Old start, but the most recent interaction (highest seq).
+        const AgentPaneInfo(
+          id: 'a',
+          command: 'claude',
+          agentStartedAtMs: 100,
+          agentStateSeq: 60,
+        ),
+        // Recent start, older interaction.
+        const AgentPaneInfo(
+          id: 'b',
+          command: 'vibe',
+          agentStartedAtMs: 900,
+          agentStateSeq: 10,
+        ),
+        // No sequence (herdr does not report it): after the seq group,
+        // by start descending.
+        const AgentPaneInfo(id: 'c', command: 'vibe-rs', agentStartedAtMs: 800),
+        const AgentPaneInfo(id: 'd', command: 'droid', agentStartedAtMs: 50),
+      ], null);
+      expect(scan.agents.map((a) => a.pane.id).toList(), ['a', 'b', 'c', 'd']);
+      expect(scan.target!.pane.id, 'a');
+    });
+
     test('orders agents most recent first, unknown starts last', () {
       final scan = RemoteUiNotifier.scanPanes([
         const AgentPaneInfo(id: 'a', command: 'vibe', agentStartedAtMs: 100),

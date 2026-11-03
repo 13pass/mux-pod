@@ -44,6 +44,13 @@ class AgentPaneInfo {
   /// most-recent-first ordering.
   final int? agentStartedAtMs;
 
+  /// herdr's global state-change sequence for the pane's agent: every
+  /// agent transition (turn started/finished, blocked…) increments it,
+  /// so a HIGHER value means a more recent interaction. Null for
+  /// panes herdr does not report. Powers the last-interaction
+  /// ordering.
+  final int? agentStateSeq;
+
   const AgentPaneInfo({
     required this.id,
     this.command,
@@ -54,6 +61,7 @@ class AgentPaneInfo {
     this.agentStatus,
     this.agentPid,
     this.agentStartedAtMs,
+    this.agentStateSeq,
   });
 
   /// Human label: workspace, tab and pane title joined with dots, e.g.
@@ -293,12 +301,14 @@ class HerdrPaneIO implements PaneIO {
   /// [_snapshotCacheTtl] so a burst of lookups (badges + one console open)
   /// costs ONE snapshot round trip instead of one per lookup. The
   /// [agentNames] map carries herdr's own agent report per pane id,
-  /// [agentStatuses] the lifecycle state it reports for each of them.
+  /// [agentStatuses] the lifecycle state it reports for each of them,
+  /// [agentSeqs] the global state-change sequence per pane.
   static const _snapshotCacheTtl = Duration(seconds: 5);
   ({
     List<AgentPaneInfo> panes,
     Map<String, String> agentNames,
     Map<String, String> agentStatuses,
+    Map<String, int> agentSeqs,
     DateTime at,
   })?
   _snapshotCache;
@@ -308,6 +318,7 @@ class HerdrPaneIO implements PaneIO {
       List<AgentPaneInfo> panes,
       Map<String, String> agentNames,
       Map<String, String> agentStatuses,
+      Map<String, int> agentSeqs,
     })
   >
   _snapshotPanes() async {
@@ -318,6 +329,7 @@ class HerdrPaneIO implements PaneIO {
         panes: cached.panes,
         agentNames: cached.agentNames,
         agentStatuses: cached.agentStatuses,
+        agentSeqs: cached.agentSeqs,
       );
     }
     final bin = await _bin();
@@ -415,6 +427,7 @@ class HerdrPaneIO implements PaneIO {
     // `clawpatrol`).
     final agentNames = <String, String>{};
     final agentStatuses = <String, String>{};
+    final agentSeqs = <String, int>{};
     if (snapshotObj is Map<String, dynamic>) {
       final agents = snapshotObj['agents'];
       if (agents is List) {
@@ -430,6 +443,10 @@ class HerdrPaneIO implements PaneIO {
             if (status is String && status.isNotEmpty) {
               agentStatuses[agentPaneId] = status;
             }
+            final seq = a['state_change_seq'];
+            if (seq is int) {
+              agentSeqs[agentPaneId] = seq;
+            }
           }
         }
       }
@@ -438,9 +455,15 @@ class HerdrPaneIO implements PaneIO {
       panes: panes,
       agentNames: agentNames,
       agentStatuses: agentStatuses,
+      agentSeqs: agentSeqs,
       at: DateTime.now(),
     );
-    return (panes: panes, agentNames: agentNames, agentStatuses: agentStatuses);
+    return (
+      panes: panes,
+      agentNames: agentNames,
+      agentStatuses: agentStatuses,
+      agentSeqs: agentSeqs,
+    );
   }
 
   Future<AgentPaneInfo> _withCommand(AgentPaneInfo pane) async {
@@ -460,6 +483,7 @@ class HerdrPaneIO implements PaneIO {
       tab: pane.tab,
       title: pane.title,
       agentStatus: pane.agentStatus,
+      agentStateSeq: pane.agentStateSeq,
     );
   }
 
@@ -589,6 +613,7 @@ class HerdrPaneIO implements PaneIO {
                   pane,
                   reported,
                   snapshot.agentStatuses[pane.id],
+                  seq: snapshot.agentSeqs[pane.id],
                 )
               : await _withCommand(pane),
         );
@@ -612,6 +637,7 @@ class HerdrPaneIO implements PaneIO {
           agentStatus: snapshot.agentStatuses[pane.id] ?? pane.agentStatus,
           agentPid: probed[pane.id]?.pid,
           agentStartedAtMs: startTimes[probed[pane.id]?.pid],
+          agentStateSeq: snapshot.agentSeqs[pane.id],
         ),
     ];
   }
@@ -621,8 +647,9 @@ class HerdrPaneIO implements PaneIO {
   AgentPaneInfo _withReportedAgent(
     AgentPaneInfo pane,
     String agent,
-    String? status,
-  ) => AgentPaneInfo(
+    String? status, {
+    int? seq,
+  }) => AgentPaneInfo(
     id: pane.id,
     command: agent,
     path: pane.path,
@@ -630,6 +657,7 @@ class HerdrPaneIO implements PaneIO {
     tab: pane.tab,
     title: pane.title,
     agentStatus: status ?? pane.agentStatus,
+    agentStateSeq: seq ?? pane.agentStateSeq,
   );
 
   @override
@@ -646,6 +674,7 @@ class HerdrPaneIO implements PaneIO {
           pane,
           reported,
           snapshot.agentStatuses[paneId],
+          seq: snapshot.agentSeqs[paneId],
         );
       }
       return _withCommand(pane);

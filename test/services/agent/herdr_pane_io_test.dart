@@ -23,8 +23,8 @@ const _snapshotJson = '''
     {"pane_id":"w5:p5","workspace_id":"w5","tab_id":"w5:t5","cwd":"/srv/gitea"}
   ],
   "agents":[
-    {"agent":"claude","agent_status":"idle","pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"},
-    {"agent":"mistral-vibe","agent_status":"working","pane_id":"w5:p5","workspace_id":"w5","tab_id":"w5:t5","cwd":"/srv/gitea"}
+    {"agent":"claude","agent_status":"idle","state_change_seq":6,"pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"},
+    {"agent":"mistral-vibe","agent_status":"working","state_change_seq":12,"pane_id":"w5:p5","workspace_id":"w5","tab_id":"w5:t5","cwd":"/srv/gitea"}
   ]
 }}}
 ''';
@@ -88,8 +88,10 @@ void main() {
       expect(panes[2].agentPid, 7);
       expect(panes[2].agentStartedAtMs, (1730000000 - 3600) * 1000);
       expect(panes[2].agentStatus, 'idle');
+      expect(panes[2].agentStateSeq, 6);
       // The herdr-vibe plugin reports Vibe sessions as "mistral-vibe".
       expect(panes[3].command, 'mistral-vibe');
+      expect(panes[3].agentStateSeq, 12);
       expect(panes[3].agentStatus, 'working');
       expect(panes[3].tab, 'gitea');
       // The custom herdr binary path is used (after the test -x probe).

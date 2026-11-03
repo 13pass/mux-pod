@@ -264,13 +264,24 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         agents.add(DetectedAgent(pane: pane, adapter: adapter));
       }
     }
-    // Most recent session first (agent process start time, newest at
-    // the top); panes without a known start keep their scan order at
-    // the end. The index tiebreak keeps equal keys stable.
+    // Last interaction first: herdr's global state-change sequence is
+    // the best proxy (every agent transition increments it). Agents
+    // herdr does not report (no sequence) sort after, by session start
+    // (newest first); unknown starts keep their scan order at the
+    // end. The index tiebreak keeps equal keys stable.
     final indexed = [
       for (var i = 0; i < agents.length; i++) (index: i, agent: agents[i]),
     ];
     indexed.sort((a, b) {
+      final aSeq = a.agent.pane.agentStateSeq;
+      final bSeq = b.agent.pane.agentStateSeq;
+      // Group 0 (known sequence) ranks before group 1, by sequence
+      // descending: the most recently active agent first.
+      if (aSeq != null && bSeq != null && aSeq != bSeq) {
+        return bSeq.compareTo(aSeq);
+      }
+      if (aSeq != null && bSeq == null) return -1;
+      if (aSeq == null && bSeq != null) return 1;
       final aMs = a.agent.pane.agentStartedAtMs;
       final bMs = b.agent.pane.agentStartedAtMs;
       if (aMs != null && bMs != null && aMs != bMs) {
@@ -290,7 +301,8 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         }
       }
     } else {
-      // No focused pane: the most recent session is the best guess.
+      // No focused pane: the most recently active session is the best
+      // guess.
       target = sorted.isEmpty ? null : sorted.first;
     }
     var resolved = 0;
