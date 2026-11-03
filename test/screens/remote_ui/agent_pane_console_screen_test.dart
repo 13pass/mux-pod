@@ -242,16 +242,20 @@ void main() {
         agent: VibeAdapter(),
         agentPaneId: 'w5:p3',
         agentPaneLabel: 'vibe · muxpod',
-        paneContent: 'user: hello\nagent: hi there',
+        paneContent:
+            '> user: hello\n'
+            '────────────────────\uFFFD\n'
+            'agent: hi there',
       ),
     );
     await tester.pumpWidget(_buildApp(remote));
     await tester.pumpAndSettle();
 
-    final preview = tester.widget<SelectableText>(
-      find.byKey(const Key('agent_console.pane_content')),
-    );
-    expect(preview.data, contains('agent: hi there'));
+    // Body text renders as a line; user lines and TUI dash walls are
+    // classified (dash walls become dividers, not text).
+    expect(find.textContaining('agent: hi there'), findsOneWidget);
+    expect(find.textContaining('> user: hello'), findsOneWidget);
+    expect(find.textContaining('───'), findsNothing);
   });
 
   testWidgets('offers a refresh hint when no output was read', (tester) async {
@@ -306,5 +310,59 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tester.pump(const Duration(seconds: 5));
     expect(contentReads(), 2);
+  });
+
+  group('classifyTranscriptLine', () {
+    test('TUI dash walls classify as dividers', () {
+      expect(
+        classifyTranscriptLine('─────────────────────────────────────\uFFFD'),
+        TranscriptLineType.divider,
+      );
+      expect(
+        classifyTranscriptLine('――――― short'),
+        isNot(TranscriptLineType.divider),
+      );
+    });
+
+    test('user input lines classify as user', () {
+      expect(
+        classifyTranscriptLine('> peux tu aussi remplacer les tirets'),
+        TranscriptLineType.user,
+      );
+      // The bare live-input prompt is chrome, not a message.
+      expect(classifyTranscriptLine('>'), TranscriptLineType.chrome);
+    });
+
+    test('agent activity markers classify as activity', () {
+      expect(
+        classifyTranscriptLine('⏵ Ran 6 commands, thought'),
+        TranscriptLineType.activity,
+      );
+    });
+
+    test('spinner, todo and status-bar lines classify as chrome', () {
+      expect(
+        classifyTranscriptLine('⢰ Running command… (33s Esc/Ctrl+C)'),
+        TranscriptLineType.chrome,
+      );
+      expect(
+        classifyTranscriptLine('▶ 1/6 · Fix bug 1: sessions list timer'),
+        TranscriptLineType.chrome,
+      );
+      expect(
+        classifyTranscriptLine(
+          '~/agents/vibe                    GLM-5.3 (Mistral Hosted)[max] · 241k/800k tokens (30%)',
+        ),
+        TranscriptLineType.chrome,
+      );
+    });
+
+    test('prose and empty lines classify as body', () {
+      expect(
+        classifyTranscriptLine('  The main test replacement never landed.'),
+        TranscriptLineType.body,
+      );
+      expect(classifyTranscriptLine(''), TranscriptLineType.body);
+    });
   });
 }

@@ -412,14 +412,10 @@ class _AgentPaneConsoleScreenState
                           border: Border.all(color: border),
                         ),
                         padding: const EdgeInsets.all(10),
-                        child: SelectableText(
-                          key: const Key('agent_console.pane_content'),
+                        child: _buildTranscriptBody(
                           remote.paneContent!,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            height: 1.25,
-                          ),
+                          border,
+                          textMuted,
                         ),
                       ),
                     ),
@@ -428,6 +424,88 @@ class _AgentPaneConsoleScreenState
         ),
       ],
     );
+  }
+
+  /// Transcript body: the pane tail rendered line by line, colored by
+  /// type (user messages in the primary color, agent activity muted,
+  /// TUI chrome faint, dash rules as thin dividers instead of walls of
+  /// `────`).
+  Widget _buildTranscriptBody(String content, Color border, Color textMuted) {
+    final theme = Theme.of(context);
+    final lines = content.split('\n');
+    return SelectionArea(
+      key: const Key('agent_console.pane_content'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final line in lines)
+            _buildTranscriptLine(
+              line,
+              theme: theme,
+              border: border,
+              textMuted: textMuted,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTranscriptLine(
+    String line, {
+    required ThemeData theme,
+    required Color border,
+    required Color textMuted,
+  }) {
+    final type = classifyTranscriptLine(line);
+    switch (type) {
+      case TranscriptLineType.divider:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Container(height: 1, color: border.withValues(alpha: 0.7)),
+        );
+      case TranscriptLineType.user:
+        return Text(
+          line,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            height: 1.35,
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w500,
+          ),
+        );
+      case TranscriptLineType.activity:
+        return Text(
+          line,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            height: 1.35,
+            color: textMuted,
+          ),
+        );
+      case TranscriptLineType.chrome:
+        if (line.trim().isEmpty) return const SizedBox(height: 5);
+        return Text(
+          line,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            height: 1.35,
+            color: textMuted.withValues(alpha: 0.7),
+          ),
+        );
+      case TranscriptLineType.body:
+        if (line.trim().isEmpty) return const SizedBox(height: 5);
+        return Text(
+          line,
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            height: 1.35,
+          ),
+        );
+    }
   }
 
   Widget _buildComposer(
@@ -588,4 +666,71 @@ class _AgentChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// How one transcript line renders in the console.
+enum TranscriptLineType { divider, user, activity, chrome, body }
+
+/// TUI spinner/todo/widget glyphs: chrome, not conversation.
+const _transcriptChromeRunes = {
+  '■',
+  '▶',
+  '●',
+  '☑',
+  '☐',
+  '⢰',
+  '⠋',
+  '⠙',
+  '⠹',
+  '⠸',
+  '⠼',
+  '⠴',
+  '⠦',
+  '⠧',
+  '⠇',
+  '⠏',
+};
+
+/// Classifies one raw pane-tail line for the transcript renderer:
+///
+/// - TUI rules (long runs of box-drawing dashes) render as dividers,
+///   not as walls of `────`.
+/// - `> …` lines are the user's messages (the agent TUI echoes input
+///   that way - including what the composer sends) - user color.
+/// - `⏵ …` lines are agent activity markers - muted.
+/// - Spinner/todo/status-bar lines and the bare live-input `>` are
+///   interface chrome - fainter muted.
+/// - Everything else is agent output - normal body color.
+TranscriptLineType classifyTranscriptLine(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return TranscriptLineType.body;
+
+  // TUI rules: at least 8 visible chars, ≥80% dashes (a trailing
+  // replacement char survives unwrapped reads of wide glyphs).
+  final compact = trimmed.replaceAll('\uFFFD', '').trim();
+  if (compact.length >= 8) {
+    final nonDash = compact.replaceAll(RegExp(r'[\s─━═\-—_=~]'), '');
+    if (nonDash.isEmpty || nonDash.length * 5 <= compact.length) {
+      return TranscriptLineType.divider;
+    }
+  }
+
+  if (trimmed.startsWith('> ') && trimmed.length > 2) {
+    return TranscriptLineType.user;
+  }
+
+  final first = trimmed.runes.isEmpty
+      ? ''
+      : String.fromCharCode(trimmed.runes.first);
+  if (first == '⏵') return TranscriptLineType.activity;
+  if (trimmed == '>') return TranscriptLineType.chrome;
+  if (_transcriptChromeRunes.contains(first)) {
+    return TranscriptLineType.chrome;
+  }
+  // Status bars survive right-trimming but keep their huge internal
+  // padding gaps.
+  if (RegExp(r'\s{5,}').hasMatch(trimmed)) {
+    return TranscriptLineType.chrome;
+  }
+  return TranscriptLineType.body;
 }
