@@ -17,10 +17,10 @@ const _snapshotJson = '''
     {"tab_id":"w5:t5","label":"gitea","workspace_id":"w5"}
   ],
   "panes":[
-    {"pane_id":"w5:p1","workspace_id":"w5","tab_id":"w5:t1","cwd":"/home/vincent/agents/vibe/revision-loyers"},
-    {"pane_id":"w5:p3","workspace_id":"w5","tab_id":"w5:t3","cwd":"/home/vincent/agents/vibe","terminal_title":"Vibe"},
-    {"pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"},
-    {"pane_id":"w5:p5","workspace_id":"w5","tab_id":"w5:t5","cwd":"/srv/gitea"}
+    {"pane_id":"w5:p1","workspace_id":"w5","tab_id":"w5:t1","revision":2,"cwd":"/home/vincent/agents/vibe/revision-loyers"},
+    {"pane_id":"w5:p3","workspace_id":"w5","tab_id":"w5:t3","revision":47,"cwd":"/home/vincent/agents/vibe","terminal_title":"Vibe"},
+    {"pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","revision":7,"cwd":"/srv/www"},
+    {"pane_id":"w5:p5","workspace_id":"w5","tab_id":"w5:t5","revision":0,"cwd":"/srv/gitea"}
   ],
   "agents":[
     {"agent":"claude","agent_status":"idle","state_change_seq":6,"pane_id":"w5:p4","workspace_id":"w5","tab_id":"w5:t4","cwd":"/srv/www"},
@@ -73,6 +73,10 @@ void main() {
       expect(panes[0].command, 'zsh');
       expect(panes[0].agentPid, 11);
       expect(panes[0].agentStartedAtMs, (1730000000 - 100) * 1000);
+      // Pane revision (content change counter) is captured for change
+      // detection.
+      expect(panes[0].paneRevision, 2);
+      expect(panes[1].paneRevision, 47);
       expect(panes[1].id, 'w5:p3');
       // "Vibe CLI" reduces to its first word for detection.
       expect(panes[1].command, 'vibe');

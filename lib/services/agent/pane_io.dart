@@ -51,6 +51,13 @@ class AgentPaneInfo {
   /// ordering.
   final int? agentStateSeq;
 
+  /// herdr's per-pane revision counter: it moves whenever the pane's
+  /// content changes (agent output, user typing, TUI redraws) - even
+  /// for panes herdr reports no agent for. Change detection between
+  /// polls pins real activity times, including desktop-side
+  /// interactions the app cannot otherwise see.
+  final int? paneRevision;
+
   const AgentPaneInfo({
     required this.id,
     this.command,
@@ -62,6 +69,7 @@ class AgentPaneInfo {
     this.agentPid,
     this.agentStartedAtMs,
     this.agentStateSeq,
+    this.paneRevision,
   });
 
   /// Human label: workspace, tab and pane title joined with dots, e.g.
@@ -403,6 +411,7 @@ class HerdrPaneIO implements PaneIO {
         final tabId = raw['tab_id'];
         final terminalTitle = raw['terminal_title'];
         final rawStatus = raw['agent_status'];
+        final rawRevision = raw['revision'];
         panes.add(
           AgentPaneInfo(
             id: paneId,
@@ -417,6 +426,7 @@ class HerdrPaneIO implements PaneIO {
             agentStatus: rawStatus is String && rawStatus != 'unknown'
                 ? rawStatus
                 : null,
+            paneRevision: rawRevision is int ? rawRevision : null,
           ),
         );
       }
@@ -484,6 +494,7 @@ class HerdrPaneIO implements PaneIO {
       title: pane.title,
       agentStatus: pane.agentStatus,
       agentStateSeq: pane.agentStateSeq,
+      paneRevision: pane.paneRevision,
     );
   }
 
@@ -638,6 +649,7 @@ class HerdrPaneIO implements PaneIO {
           agentPid: probed[pane.id]?.pid,
           agentStartedAtMs: startTimes[probed[pane.id]?.pid],
           agentStateSeq: snapshot.agentSeqs[pane.id],
+          paneRevision: pane.paneRevision,
         ),
     ];
   }
@@ -658,6 +670,7 @@ class HerdrPaneIO implements PaneIO {
     title: pane.title,
     agentStatus: status ?? pane.agentStatus,
     agentStateSeq: seq ?? pane.agentStateSeq,
+    paneRevision: pane.paneRevision,
   );
 
   @override

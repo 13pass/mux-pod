@@ -164,27 +164,43 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   /// the server sequence is the fallback.
   final Map<String, int> _paneInteractionMs = {};
 
-  /// Last observed herdr state-change sequence per pane and the wall
-  /// clock when that change was OBSERVED (a seq bump between two
-  /// polls means the agent was active moments ago). atMs stays null
-  /// until the first observed change.
-  final Map<String, ({int seq, int? atMs})> _paneSeqClocks = {};
+  /// Change detector per pane: the last seen herdr state sequence and
+  /// pane revision, with the wall clock of the poll that OBSERVED the
+  /// last change. Either marker moving between two polls pins the
+  /// pane's activity to now (poll granularity) - the revision covers
+  /// ANY pane content change, including desktop-side interaction the
+  /// app cannot otherwise see. atMs stays null until the first
+  /// observed change (first sight is at an unknown past time).
+  final Map<String, ({int? seq, int revision, int? atMs})> _paneChangeClocks =
+      {};
 
   void _touchInteraction(String paneId) {
     _paneInteractionMs[paneId] = DateTime.now().millisecondsSinceEpoch;
   }
 
-  void _observeSeqChanges(List<AgentPaneInfo> panes) {
+  void _observePaneChanges(List<AgentPaneInfo> panes) {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     for (final pane in panes) {
       final seq = pane.agentStateSeq;
-      if (seq == null) continue;
-      final known = _paneSeqClocks[pane.id];
+      final revision = pane.paneRevision;
+      if (seq == null && revision == null) continue;
+      final known = _paneChangeClocks[pane.id];
       if (known == null) {
-        // First sight: the change happened at an unknown past time.
-        _paneSeqClocks[pane.id] = (seq: seq, atMs: null);
-      } else if (known.seq != seq) {
-        _paneSeqClocks[pane.id] = (seq: seq, atMs: nowMs);
+        _paneChangeClocks[pane.id] = (
+          seq: seq,
+          revision: revision ?? -1,
+          atMs: null,
+        );
+        continue;
+      }
+      final seqChanged = seq != null && seq != known.seq;
+      final revisionChanged = revision != null && revision != known.revision;
+      if (seqChanged || revisionChanged) {
+        _paneChangeClocks[pane.id] = (
+          seq: seq ?? known.seq,
+          revision: revision ?? known.revision,
+          atMs: nowMs,
+        );
       }
     }
   }
@@ -248,13 +264,13 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       }
 
       final panes = await paneIO.listPanes();
-      // Pin agent state changes to the wall clock: when a pane's herdr
-      // sequence moved since the last look, its last activity is NOW
+      // Pin pane changes to the wall clock: when a pane's sequence or
+      // revision moved since the last look, its last activity is NOW
       // (poll granularity). First sight stays unpinned - the change
       // happened at some unknown past time.
-      _observeSeqChanges(panes);
+      _observePaneChanges(panes);
       final activity = <String, int>{..._paneInteractionMs};
-      for (final entry in _paneSeqClocks.entries) {
+      for (final entry in _paneChangeClocks.entries) {
         final atMs = entry.value.atMs;
         if (atMs == null) continue;
         final previous = activity[entry.key];
@@ -602,7 +618,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     _transport = null;
     _ownsClient = false;
     _paneInteractionMs.clear();
-    _paneSeqClocks.clear();
+    _paneChangeClocks.clear();
     if (client != null) await client.disconnect();
     state = const RemoteUiState();
   }
