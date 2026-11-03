@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/remote_ui_provider.dart';
+import '../../services/agent/agent_types.dart';
 import '../../services/agent/pane_io.dart';
 import '../../theme/design_colors.dart';
 
@@ -414,6 +415,7 @@ class _AgentPaneConsoleScreenState
                         padding: const EdgeInsets.all(10),
                         child: _buildTranscriptBody(
                           remote.paneContent!,
+                          agent.kind,
                           border,
                           textMuted,
                         ),
@@ -430,8 +432,14 @@ class _AgentPaneConsoleScreenState
   /// type (user messages in the primary color, agent activity muted,
   /// TUI chrome faint, dash rules as thin dividers instead of walls of
   /// `────`).
-  Widget _buildTranscriptBody(String content, Color border, Color textMuted) {
+  Widget _buildTranscriptBody(
+    String content,
+    AgentKind kind,
+    Color border,
+    Color textMuted,
+  ) {
     final theme = Theme.of(context);
+    final rules = TranscriptRules.forKind(kind);
     final lines = content.split('\n');
     return SelectionArea(
       key: const Key('agent_console.pane_content'),
@@ -441,6 +449,7 @@ class _AgentPaneConsoleScreenState
           for (final line in lines)
             _buildTranscriptLine(
               line,
+              rules: rules,
               theme: theme,
               border: border,
               textMuted: textMuted,
@@ -452,11 +461,12 @@ class _AgentPaneConsoleScreenState
 
   Widget _buildTranscriptLine(
     String line, {
+    required TranscriptRules rules,
     required ThemeData theme,
     required Color border,
     required Color textMuted,
   }) {
-    final type = classifyTranscriptLine(line);
+    final type = classifyTranscriptLine(line, rules: rules);
     switch (type) {
       case TranscriptLineType.divider:
         return Padding(
@@ -671,37 +681,91 @@ class _AgentChip extends StatelessWidget {
 /// How one transcript line renders in the console.
 enum TranscriptLineType { divider, user, activity, chrome, body }
 
-/// TUI spinner/todo/widget glyphs: chrome, not conversation.
-const _transcriptChromeRunes = {
-  '■',
-  '▶',
-  '●',
-  '☑',
-  '☐',
-  '⢰',
-  '⠋',
-  '⠙',
-  '⠹',
-  '⠸',
-  '⠼',
-  '⠴',
-  '⠦',
-  '⠧',
-  '⠇',
-  '⠏',
-};
+/// Per-agent transcript formatting rules. Every agent TUI echoes user
+/// input, activity and status chrome with its own glyphs; the rules map
+/// them so the renderer can color by meaning.
+///
+/// [TranscriptRules.vibe] and [TranscriptRules.claude] are calibrated
+/// against live pane reads; other kinds fall back to the generic
+/// profile (reasonable defaults, same dash-wall/padding detection).
+class TranscriptRules {
+  const TranscriptRules({
+    this.userPrefixes = const ['> '],
+    this.activityRunes = const ['⏵'],
+    this.chromeRunes = _genericChromeRunes,
+    this.barePromptRunes = const ['>'],
+  });
+
+  /// Line prefixes that mark the user's own messages.
+  final List<String> userPrefixes;
+
+  /// Leading runes that mark agent activity (markers, tool results).
+  final List<String> activityRunes;
+
+  /// Leading runes that mark TUI chrome (spinners, todos, status).
+  final List<String> chromeRunes;
+
+  /// Whole-line runes: the live input prompt, chrome not a message.
+  final List<String> barePromptRunes;
+
+  static const _genericChromeRunes = [
+    '■',
+    '▶',
+    '●',
+    '☑',
+    '☐',
+    '⢰',
+    '⠋',
+    '⠙',
+    '⠹',
+    '⠸',
+    '⠼',
+    '⠴',
+    '⠦',
+    '⠧',
+    '⠇',
+    '⠏',
+  ];
+
+  /// Vibe (default profile).
+  static const vibe = TranscriptRules();
+
+  /// Claude Code: `❯` prompt, `✻` done markers, `⎿` tool results,
+  /// `※` recaps, `▎` annotations, `●` alerts, `🟢` status.
+  static const claude = TranscriptRules(
+    userPrefixes: ['> ', '❯ '],
+    activityRunes: ['✻', '✽', '✢', '✳', '✶', '※', '▎', '⎿', '●', '⏵'],
+    chromeRunes: [..._genericChromeRunes, '🟢', '🔴', '❯'],
+    barePromptRunes: ['>', '❯'],
+  );
+
+  /// Rules for one agent kind (generic profile for uncalibrated TUIs).
+  static TranscriptRules forKind(AgentKind kind) {
+    switch (kind) {
+      case AgentKind.vibe:
+        return vibe;
+      case AgentKind.claudeCode:
+        return claude;
+      default:
+        return const TranscriptRules();
+    }
+  }
+}
 
 /// Classifies one raw pane-tail line for the transcript renderer:
 ///
 /// - TUI rules (long runs of box-drawing dashes) render as dividers,
 ///   not as walls of `────`.
-/// - `> …` lines are the user's messages (the agent TUI echoes input
-///   that way - including what the composer sends) - user color.
-/// - `⏵ …` lines are agent activity markers - muted.
-/// - Spinner/todo/status-bar lines and the bare live-input `>` are
-///   interface chrome - fainter muted.
+/// - User-prefixed lines are the user's messages (the agent TUI echoes
+///   input that way - including what the composer sends) - user color.
+/// - Activity runes mark agent activity - muted.
+/// - Chrome runes and status-bar lines (huge padding gaps survive
+///   right-trimming) - fainter muted.
 /// - Everything else is agent output - normal body color.
-TranscriptLineType classifyTranscriptLine(String raw) {
+TranscriptLineType classifyTranscriptLine(
+  String raw, {
+  TranscriptRules rules = TranscriptRules.vibe,
+}) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return TranscriptLineType.body;
 
@@ -715,16 +779,22 @@ TranscriptLineType classifyTranscriptLine(String raw) {
     }
   }
 
-  if (trimmed.startsWith('> ') && trimmed.length > 2) {
-    return TranscriptLineType.user;
+  for (final prefix in rules.userPrefixes) {
+    if (trimmed.startsWith(prefix) && trimmed.length > prefix.length) {
+      return TranscriptLineType.user;
+    }
   }
 
   final first = trimmed.runes.isEmpty
       ? ''
       : String.fromCharCode(trimmed.runes.first);
-  if (first == '⏵') return TranscriptLineType.activity;
-  if (trimmed == '>') return TranscriptLineType.chrome;
-  if (_transcriptChromeRunes.contains(first)) {
+  if (rules.activityRunes.contains(first)) {
+    return TranscriptLineType.activity;
+  }
+  if (rules.barePromptRunes.contains(trimmed)) {
+    return TranscriptLineType.chrome;
+  }
+  if (rules.chromeRunes.contains(first)) {
     return TranscriptLineType.chrome;
   }
   // Status bars survive right-trimming but keep their huge internal

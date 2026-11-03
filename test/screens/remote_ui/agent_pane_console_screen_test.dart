@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_muxpod/providers/remote_ui_provider.dart';
 import 'package:flutter_muxpod/screens/remote_ui/agent_pane_console_screen.dart';
+import 'package:flutter_muxpod/services/agent/agent_types.dart';
 import 'package:flutter_muxpod/services/agent/claude_code_adapter.dart';
 import 'package:flutter_muxpod/services/agent/pane_io.dart';
 import 'package:flutter_muxpod/services/agent/vibe_adapter.dart';
@@ -363,6 +364,88 @@ void main() {
         TranscriptLineType.body,
       );
       expect(classifyTranscriptLine(''), TranscriptLineType.body);
+    });
+
+    test('claude profile: calibrated against a live pane read', () {
+      const rules = TranscriptRules.claude;
+      // User input (typed history and the live ❯ prompt).
+      expect(
+        classifyTranscriptLine('> can you fix the pricing?', rules: rules),
+        TranscriptLineType.user,
+      );
+      expect(
+        classifyTranscriptLine('❯ can you fix the pricing?', rules: rules),
+        TranscriptLineType.user,
+      );
+      expect(
+        classifyTranscriptLine('❯', rules: rules),
+        TranscriptLineType.chrome, // bare live prompt
+      );
+      // Activity: done markers, tool results, recaps, annotations.
+      expect(
+        classifyTranscriptLine(
+          '✻ Sautéed for 6m 44s · done 17:55',
+          rules: rules,
+        ),
+        TranscriptLineType.activity,
+      );
+      expect(
+        classifyTranscriptLine('⎿ Read 4 lines (selected 1)', rules: rules),
+        TranscriptLineType.activity,
+      );
+      expect(
+        classifyTranscriptLine(
+          '※ recap: Merged main into your Langfuse branch',
+          rules: rules,
+        ),
+        TranscriptLineType.activity,
+      );
+      expect(
+        classifyTranscriptLine(
+          '▎ UNVERIFIED — not readable off the page',
+          rules: rules,
+        ),
+        TranscriptLineType.activity,
+      );
+      expect(
+        classifyTranscriptLine(
+          '● Remote Control disconnected — run /login',
+          rules: rules,
+        ),
+        TranscriptLineType.activity,
+      );
+      // Status bar.
+      expect(
+        classifyTranscriptLine(
+          '🟢 Opus 5 (1M context) ▓▓░░░░░░░░ 20% | \$11.73 | 102g CO₂',
+          rules: rules,
+        ),
+        TranscriptLineType.chrome,
+      );
+      // Prose stays body.
+      expect(
+        classifyTranscriptLine(
+          '  The placeholder over-stated prices.',
+          rules: rules,
+        ),
+        TranscriptLineType.body,
+      );
+    });
+
+    test('forKind maps kinds to profiles', () {
+      expect(
+        TranscriptRules.forKind(AgentKind.vibe),
+        same(TranscriptRules.vibe),
+      );
+      expect(
+        TranscriptRules.forKind(AgentKind.claudeCode),
+        same(TranscriptRules.claude),
+      );
+      // Uncalibrated kinds get the generic profile.
+      expect(
+        TranscriptRules.forKind(AgentKind.codex),
+        isNot(same(TranscriptRules.claude)),
+      );
     });
   });
 }
