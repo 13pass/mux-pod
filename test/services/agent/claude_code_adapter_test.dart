@@ -125,7 +125,10 @@ void main() {
     test('types /model into the pane and submits it', () async {
       final ssh = FakeAgentTransport();
       final message = await adapter.applyModel(contextFor(ssh), 'opus');
-      expect(ssh.paneIO.calls, ['typeLiteral %7 /model opus', 'enter %7']);
+      expect(ssh.paneIO.calls, [
+        'typeLiteral %7 /model opus',
+        'enter %7',
+      ]);
       expect(message, contains('/model opus'));
     });
   });
@@ -137,16 +140,19 @@ void main() {
         contextFor(ssh),
         UnifiedIntelligence.extraHigh,
       );
-      expect(ssh.paneIO.calls, ['typeLiteral %7 /effort xhigh', 'enter %7']);
+      expect(ssh.paneIO.calls, [
+        'typeLiteral %7 /effort xhigh',
+        'enter %7',
+      ]);
       expect(message, contains('xhigh'));
     });
   });
 
   group('applyPermission', () {
     test('writes permissions.defaultMode to settings.json', () async {
-      final ssh = FakeAgentTransport(
-        files: {ClaudeCodeAdapter.settingsPath: '{\n  "model": "sonnet"\n}\n'},
-      );
+      final ssh = FakeAgentTransport(files: {
+        ClaudeCodeAdapter.settingsPath: '{\n  "model": "sonnet"\n}\n',
+      });
       final message = await adapter.applyPermission(
         contextFor(ssh),
         UnifiedPermission.autoReview,
@@ -164,9 +170,9 @@ void main() {
     });
 
     test('custom leaves the config file untouched', () async {
-      final ssh = FakeAgentTransport(
-        files: {ClaudeCodeAdapter.settingsPath: '{}\n'},
-      );
+      final ssh = FakeAgentTransport(files: {
+        ClaudeCodeAdapter.settingsPath: '{}\n',
+      });
       final message = await adapter.applyPermission(
         contextFor(ssh),
         UnifiedPermission.custom,
@@ -179,38 +185,33 @@ void main() {
   });
 
   group('setPlanMode', () {
-    test(
-      'enable writes defaultMode "plan", disable restores "default"',
-      () async {
-        final ssh = FakeAgentTransport();
-        await adapter.setPlanMode(contextFor(ssh), true);
-        expect(
-          ssh.files[ClaudeCodeAdapter.settingsPath],
-          '{\n  "permissions": {\n    "defaultMode": "plan"\n  }\n}\n',
-        );
-        await adapter.setPlanMode(contextFor(ssh), false);
-        expect(
-          ssh.files[ClaudeCodeAdapter.settingsPath],
-          '{\n  "permissions": {\n    "defaultMode": "default"\n  }\n}\n',
-        );
-      },
-    );
+    test('enable writes defaultMode "plan", disable restores "default"',
+        () async {
+      final ssh = FakeAgentTransport();
+      await adapter.setPlanMode(contextFor(ssh), true);
+      expect(
+        ssh.files[ClaudeCodeAdapter.settingsPath],
+        '{\n  "permissions": {\n    "defaultMode": "plan"\n  }\n}\n',
+      );
+      await adapter.setPlanMode(contextFor(ssh), false);
+      expect(
+        ssh.files[ClaudeCodeAdapter.settingsPath],
+        '{\n  "permissions": {\n    "defaultMode": "default"\n  }\n}\n',
+      );
+    });
   });
 
   group('readConfig', () {
     test('parses model, effortLevel, and defaultMode', () async {
-      final ssh = FakeAgentTransport(
-        files: {
-          ClaudeCodeAdapter.settingsPath:
-              '{\n'
-              '  "model": "opus",\n'
-              '  "effortLevel": "xhigh",\n'
-              '  "permissions": {\n'
-              '    "defaultMode": "acceptEdits"\n'
-              '  }\n'
-              '}\n',
-        },
-      );
+      final ssh = FakeAgentTransport(files: {
+        ClaudeCodeAdapter.settingsPath: '{\n'
+            '  "model": "opus",\n'
+            '  "effortLevel": "xhigh",\n'
+            '  "permissions": {\n'
+            '    "defaultMode": "acceptEdits"\n'
+            '  }\n'
+            '}\n',
+      });
       final config = await adapter.readConfig(contextFor(ssh));
       expect(config.model, 'opus');
       expect(config.intelligence, UnifiedIntelligence.extraHigh);
@@ -219,12 +220,10 @@ void main() {
     });
 
     test('reports plan mode via planModeActive', () async {
-      final ssh = FakeAgentTransport(
-        files: {
-          ClaudeCodeAdapter.settingsPath:
-              '{"permissions": {"defaultMode": "plan"}}',
-        },
-      );
+      final ssh = FakeAgentTransport(files: {
+        ClaudeCodeAdapter.settingsPath:
+            '{"permissions": {"defaultMode": "plan"}}',
+      });
       final config = await adapter.readConfig(contextFor(ssh));
       expect(config.planModeActive, isTrue);
       expect(config.permission, isNull);

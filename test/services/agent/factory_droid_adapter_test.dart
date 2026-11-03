@@ -17,13 +17,16 @@ void main() {
       expect(adapter.kind, AgentKind.droid);
       expect(adapter.processNames, ['droid']);
       // Droid reasoningEffort has no "ultra" rung.
-      expect(adapter.capabilities.intelligenceLevels, [
-        UnifiedIntelligence.low,
-        UnifiedIntelligence.medium,
-        UnifiedIntelligence.high,
-        UnifiedIntelligence.extraHigh,
-        UnifiedIntelligence.max,
-      ]);
+      expect(
+        adapter.capabilities.intelligenceLevels,
+        [
+          UnifiedIntelligence.low,
+          UnifiedIntelligence.medium,
+          UnifiedIntelligence.high,
+          UnifiedIntelligence.extraHigh,
+          UnifiedIntelligence.max,
+        ],
+      );
       expect(
         adapter.capabilities.permissionLevels,
         containsAll(UnifiedPermission.values),
@@ -87,7 +90,10 @@ void main() {
         FactoryDroidAdapter.intelligenceForReasoningEffort('xhigh'),
         UnifiedIntelligence.extraHigh,
       );
-      expect(FactoryDroidAdapter.intelligenceForReasoningEffort('off'), isNull);
+      expect(
+        FactoryDroidAdapter.intelligenceForReasoningEffort('off'),
+        isNull,
+      );
       expect(
         FactoryDroidAdapter.intelligenceForReasoningEffort('dynamic'),
         isNull,
@@ -165,9 +171,9 @@ void main() {
 
   group('applyIntelligence', () {
     test('writes reasoningEffort to settings.json', () async {
-      final ssh = FakeAgentTransport(
-        files: {FactoryDroidAdapter.settingsPath: '{\n  "theme": "dark"\n}\n'},
-      );
+      final ssh = FakeAgentTransport(files: {
+        FactoryDroidAdapter.settingsPath: '{\n  "theme": "dark"\n}\n',
+      });
       final message = await adapter.applyIntelligence(
         contextFor(ssh),
         UnifiedIntelligence.high,
@@ -199,9 +205,9 @@ void main() {
     });
 
     test('custom leaves the config file untouched', () async {
-      final ssh = FakeAgentTransport(
-        files: {FactoryDroidAdapter.settingsPath: '{}\n'},
-      );
+      final ssh = FakeAgentTransport(files: {
+        FactoryDroidAdapter.settingsPath: '{}\n',
+      });
       final message = await adapter.applyPermission(
         contextFor(ssh),
         UnifiedPermission.custom,
@@ -239,19 +245,16 @@ void main() {
 
   group('readConfig', () {
     test('parses model, effort, autonomy, and interaction mode', () async {
-      final ssh = FakeAgentTransport(
-        files: {
-          FactoryDroidAdapter.settingsPath:
-              '{\n'
-              '  "model": "claude-opus-4-7",\n'
-              '  "reasoningEffort": "xhigh",\n'
-              '  "sessionDefaultSettings": {\n'
-              '    "autonomyLevel": "medium",\n'
-              '    "interactionMode": "spec"\n'
-              '  }\n'
-              '}\n',
-        },
-      );
+      final ssh = FakeAgentTransport(files: {
+        FactoryDroidAdapter.settingsPath: '{\n'
+            '  "model": "claude-opus-4-7",\n'
+            '  "reasoningEffort": "xhigh",\n'
+            '  "sessionDefaultSettings": {\n'
+            '    "autonomyLevel": "medium",\n'
+            '    "interactionMode": "spec"\n'
+            '  }\n'
+            '}\n',
+      });
       final config = await adapter.readConfig(contextFor(ssh));
       expect(config.model, 'claude-opus-4-7');
       expect(config.intelligence, UnifiedIntelligence.extraHigh);

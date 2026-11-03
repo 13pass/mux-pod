@@ -23,12 +23,15 @@ void main() {
       expect(adapter.processNames, ['codex']);
       expect(adapter.capabilities.requiresRestartToApply, isTrue);
       // Codex has no max/ultra reasoning rungs.
-      expect(adapter.capabilities.intelligenceLevels, [
-        UnifiedIntelligence.low,
-        UnifiedIntelligence.medium,
-        UnifiedIntelligence.high,
-        UnifiedIntelligence.extraHigh,
-      ]);
+      expect(
+        adapter.capabilities.intelligenceLevels,
+        [
+          UnifiedIntelligence.low,
+          UnifiedIntelligence.medium,
+          UnifiedIntelligence.high,
+          UnifiedIntelligence.extraHigh,
+        ],
+      );
       // TUI plan mode has no deterministic external control.
       expect(adapter.capabilities.supportsPlanMode, isFalse);
       // Model IDs vary by provider: free-text entry.
@@ -43,7 +46,9 @@ void main() {
         'low',
       );
       expect(
-        CodexAdapter.reasoningEffortForIntelligence(UnifiedIntelligence.medium),
+        CodexAdapter.reasoningEffortForIntelligence(
+          UnifiedIntelligence.medium,
+        ),
         'medium',
       );
       expect(
@@ -81,23 +86,24 @@ void main() {
       expect(CodexAdapter.intelligenceForReasoningEffort('minimal'), isNull);
     });
 
-    test('configForPermission maps to sandbox_mode/approval_policy pairs', () {
-      expect(CodexAdapter.configForPermission(UnifiedPermission.readOnly), (
-        sandboxMode: 'read-only',
-        approvalPolicy: null,
-      ));
+    test('configForPermission maps to sandbox_mode/approval_policy pairs',
+        () {
+      expect(
+        CodexAdapter.configForPermission(UnifiedPermission.readOnly),
+        (sandboxMode: 'read-only', approvalPolicy: null),
+      );
       expect(
         CodexAdapter.configForPermission(UnifiedPermission.defaultPermissions),
         (sandboxMode: 'workspace-write', approvalPolicy: 'on-request'),
       );
-      expect(CodexAdapter.configForPermission(UnifiedPermission.autoReview), (
-        sandboxMode: 'workspace-write',
-        approvalPolicy: 'on-failure',
-      ));
-      expect(CodexAdapter.configForPermission(UnifiedPermission.fullAccess), (
-        sandboxMode: 'danger-full-access',
-        approvalPolicy: 'never',
-      ));
+      expect(
+        CodexAdapter.configForPermission(UnifiedPermission.autoReview),
+        (sandboxMode: 'workspace-write', approvalPolicy: 'on-failure'),
+      );
+      expect(
+        CodexAdapter.configForPermission(UnifiedPermission.fullAccess),
+        (sandboxMode: 'danger-full-access', approvalPolicy: 'never'),
+      );
       expect(
         CodexAdapter.configForPermission(UnifiedPermission.custom),
         isNull,
@@ -157,25 +163,20 @@ void main() {
   });
 
   group('applyModel', () {
-    test('writes the model key, preserves other lines, and restarts', () async {
-      final ssh = FakeAgentTransport(
-        files: {
-          CodexAdapter.configPath:
-              '# my config\n'
-              'model = "gpt-5"\n'
-              'approval_policy = "on-request"\n',
-        },
-      );
+    test('writes the model key, preserves other lines, and restarts',
+        () async {
+      final ssh = FakeAgentTransport(files: {
+        CodexAdapter.configPath: '# my config\n'
+            'model = "gpt-5"\n'
+            'approval_policy = "on-request"\n',
+      });
       final message = await adapter.applyModel(
         contextFor(ssh, workingDirectory: '/home/user/proj'),
         'gpt-5.5',
       );
-      expect(
-        ssh.files[CodexAdapter.configPath],
-        '# my config\n'
-        'model = "gpt-5.5"\n'
-        'approval_policy = "on-request"\n',
-      );
+      expect(ssh.files[CodexAdapter.configPath], '# my config\n'
+          'model = "gpt-5.5"\n'
+          'approval_policy = "on-request"\n');
       // Restart: double Ctrl+C, then relaunch in the pane's directory.
       expect(ssh.paneIO.calls, [
         'interrupt %3',
@@ -190,25 +191,23 @@ void main() {
   });
 
   group('applyIntelligence', () {
-    test(
-      'writes model_reasoning_effort and restarts with \$HOME fallback',
-      () async {
-        final ssh = FakeAgentTransport();
-        await adapter.applyIntelligence(
-          contextFor(ssh),
-          UnifiedIntelligence.high,
-        );
-        expect(
-          ssh.files[CodexAdapter.configPath],
-          'model_reasoning_effort = "high"\n',
-        );
-        expect(ssh.paneIO.calls.last, 'enter %3');
-        expect(
-          ssh.paneIO.calls[ssh.paneIO.calls.length - 2],
-          r'typeLiteral %3 cd -- "$HOME" && codex',
-        );
-      },
-    );
+    test('writes model_reasoning_effort and restarts with \$HOME fallback',
+        () async {
+      final ssh = FakeAgentTransport();
+      await adapter.applyIntelligence(
+        contextFor(ssh),
+        UnifiedIntelligence.high,
+      );
+      expect(
+        ssh.files[CodexAdapter.configPath],
+        'model_reasoning_effort = "high"\n',
+      );
+      expect(ssh.paneIO.calls.last, 'enter %3');
+      expect(
+        ssh.paneIO.calls[ssh.paneIO.calls.length - 2],
+        r'typeLiteral %3 cd -- "$HOME" && codex',
+      );
+    });
 
     test('rejects unsupported levels without touching the file', () async {
       final ssh = FakeAgentTransport();
@@ -224,30 +223,25 @@ void main() {
   group('applyPermission', () {
     test('readOnly writes only sandbox_mode', () async {
       final ssh = FakeAgentTransport();
-      await adapter.applyPermission(
-        contextFor(ssh),
-        UnifiedPermission.readOnly,
-      );
+      await adapter.applyPermission(contextFor(ssh), UnifiedPermission.readOnly);
       expect(
         ssh.files[CodexAdapter.configPath],
         'sandbox_mode = "read-only"\n',
       );
     });
 
-    test(
-      'defaultPermissions writes sandbox_mode and approval_policy',
-      () async {
-        final ssh = FakeAgentTransport();
-        await adapter.applyPermission(
-          contextFor(ssh),
-          UnifiedPermission.defaultPermissions,
-        );
-        expect(
-          ssh.files[CodexAdapter.configPath],
-          'sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n',
-        );
-      },
-    );
+    test('defaultPermissions writes sandbox_mode and approval_policy',
+        () async {
+      final ssh = FakeAgentTransport();
+      await adapter.applyPermission(
+        contextFor(ssh),
+        UnifiedPermission.defaultPermissions,
+      );
+      expect(
+        ssh.files[CodexAdapter.configPath],
+        'sandbox_mode = "workspace-write"\napproval_policy = "on-request"\n',
+      );
+    });
 
     test('fullAccess writes danger-full-access and never', () async {
       final ssh = FakeAgentTransport();
@@ -285,15 +279,12 @@ void main() {
 
   group('readConfig', () {
     test('parses model, effort, and permission from config.toml', () async {
-      final ssh = FakeAgentTransport(
-        files: {
-          CodexAdapter.configPath:
-              'model = "gpt-5.5"\n'
-              'model_reasoning_effort = "xhigh"\n'
-              'sandbox_mode = "workspace-write"\n'
-              'approval_policy = "on-failure"\n',
-        },
-      );
+      final ssh = FakeAgentTransport(files: {
+        CodexAdapter.configPath: 'model = "gpt-5.5"\n'
+            'model_reasoning_effort = "xhigh"\n'
+            'sandbox_mode = "workspace-write"\n'
+            'approval_policy = "on-failure"\n',
+      });
       final config = await adapter.readConfig(contextFor(ssh));
       expect(config.model, 'gpt-5.5');
       expect(config.intelligence, UnifiedIntelligence.extraHigh);

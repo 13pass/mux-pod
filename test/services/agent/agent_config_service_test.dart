@@ -45,8 +45,7 @@ void main() {
 
   group('AgentConfigService.tomlSetString', () {
     test('replaces an existing key and preserves unrelated lines', () {
-      const content =
-          '# Codex config\n'
+      const content = '# Codex config\n'
           'model = "gpt-5"\n'
           'approval_policy = "on-request"\n'
           '\n'
@@ -79,8 +78,7 @@ void main() {
     });
 
     test('inserts before the first table so the key stays top-level', () {
-      const content =
-          'model = "gpt-5"\n'
+      const content = 'model = "gpt-5"\n'
           '\n'
           '[mcp_servers.fs]\n'
           'command = "npx"\n';
@@ -106,7 +104,10 @@ void main() {
         'model',
         'gpt-5.5',
       );
-      expect(updated, 'model = "gpt-5.5"\n[profiles.work]\nmodel = "gpt-5"\n');
+      expect(
+        updated,
+        'model = "gpt-5.5"\n[profiles.work]\nmodel = "gpt-5"\n',
+      );
     });
 
     test('creates content from an empty file', () {
@@ -117,7 +118,11 @@ void main() {
     });
 
     test('escapes double quotes and backslashes in values', () {
-      final updated = AgentConfigService.tomlSetString('', 'model', 'a"b\\c');
+      final updated = AgentConfigService.tomlSetString(
+        '',
+        'model',
+        'a"b\\c',
+      );
       expect(updated, 'model = "a\\"b\\\\c"\n');
       // Round-trip: escaped quotes and backslashes parse back.
       expect(AgentConfigService.tomlGetString(updated, 'model'), 'a"b\\c');
@@ -145,8 +150,7 @@ void main() {
     });
 
     test('preserves existing keys and uses 2-space indent', () {
-      const content =
-          '{\n'
+      const content = '{\n'
           '  "model": "sonnet",\n'
           '  "permissions": {\n'
           '    "allow": [\n'
@@ -207,7 +211,10 @@ void main() {
         AgentConfigService.jsonGetDotted(content, 'permissions.defaultMode'),
         isNull,
       );
-      expect(AgentConfigService.jsonGetDotted(content, 'other.key'), isNull);
+      expect(
+        AgentConfigService.jsonGetDotted(content, 'other.key'),
+        isNull,
+      );
     });
 
     test('returns null for empty content', () {
@@ -232,54 +239,50 @@ void main() {
       );
     });
 
-    test(
-      'writeRemoteFileAtomic writes content and keeps a one-time backup',
-      () async {
-        const path = r'$HOME/.codex/config.toml';
-        final ssh = FakeAgentTransport(files: {path: 'model = "gpt-5"\n'});
+    test('writeRemoteFileAtomic writes content and keeps a one-time backup',
+        () async {
+      const path = r'$HOME/.codex/config.toml';
+      final ssh = FakeAgentTransport(files: {path: 'model = "gpt-5"\n'});
 
-        await AgentConfigService.writeRemoteFileAtomic(
-          ssh,
-          path,
-          'model = "gpt-5.5"\n',
-        );
-        expect(ssh.files[path], 'model = "gpt-5.5"\n');
-        expect(
-          ssh.files['$path${AgentConfigService.backupSuffix}'],
-          'model = "gpt-5"\n',
-        );
-        // The write went through a temp file + mv (atomic rename).
-        expect(
-          ssh.execCommands.last,
-          allOf(contains('base64 -d'), contains('mv -f --')),
-        );
+      await AgentConfigService.writeRemoteFileAtomic(
+        ssh,
+        path,
+        'model = "gpt-5.5"\n',
+      );
+      expect(ssh.files[path], 'model = "gpt-5.5"\n');
+      expect(
+        ssh.files['$path${AgentConfigService.backupSuffix}'],
+        'model = "gpt-5"\n',
+      );
+      // The write went through a temp file + mv (atomic rename).
+      expect(
+        ssh.execCommands.last,
+        allOf(contains('base64 -d'), contains('mv -f --')),
+      );
 
-        // A second write must not overwrite the original backup.
-        await AgentConfigService.writeRemoteFileAtomic(
-          ssh,
-          path,
-          'model = "gpt-6"\n',
-        );
-        expect(ssh.files[path], 'model = "gpt-6"\n');
-        expect(
-          ssh.files['$path${AgentConfigService.backupSuffix}'],
-          'model = "gpt-5"\n',
-        );
-      },
-    );
+      // A second write must not overwrite the original backup.
+      await AgentConfigService.writeRemoteFileAtomic(
+        ssh,
+        path,
+        'model = "gpt-6"\n',
+      );
+      expect(ssh.files[path], 'model = "gpt-6"\n');
+      expect(
+        ssh.files['$path${AgentConfigService.backupSuffix}'],
+        'model = "gpt-5"\n',
+      );
+    });
 
-    test(
-      'writeRemoteFileAtomic creates the file when it does not exist',
-      () async {
-        const path = r'$HOME/.claude/settings.json';
-        final ssh = FakeAgentTransport();
-        await AgentConfigService.writeRemoteFileAtomic(ssh, path, '{}\n');
-        expect(ssh.files[path], '{}\n');
-        expect(
-          ssh.files.containsKey('$path${AgentConfigService.backupSuffix}'),
-          isFalse,
-        );
-      },
-    );
+    test('writeRemoteFileAtomic creates the file when it does not exist',
+        () async {
+      const path = r'$HOME/.claude/settings.json';
+      final ssh = FakeAgentTransport();
+      await AgentConfigService.writeRemoteFileAtomic(ssh, path, '{}\n');
+      expect(ssh.files[path], '{}\n');
+      expect(
+        ssh.files.containsKey('$path${AgentConfigService.backupSuffix}'),
+        isFalse,
+      );
+    });
   });
 }

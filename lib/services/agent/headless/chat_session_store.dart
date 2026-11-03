@@ -37,9 +37,9 @@ enum ChatRole {
   /// Parses [wireName]; unknown values default to [ChatRole.assistant]
   /// so old payloads never crash the load path.
   static ChatRole parse(String? wireName) => switch (wireName) {
-    'user' => ChatRole.user,
-    _ => ChatRole.assistant,
-  };
+        'user' => ChatRole.user,
+        _ => ChatRole.assistant,
+      };
 }
 
 /// One stored chat message.
@@ -60,10 +60,10 @@ class ChatMessageRecord {
   });
 
   Map<String, dynamic> toJson() => {
-    'role': role.wireName,
-    'text': text,
-    'timestamp': timestamp.toIso8601String(),
-  };
+        'role': role.wireName,
+        'text': text,
+        'timestamp': timestamp.toIso8601String(),
+      };
 
   /// Strictly parses one message entry; returns null on malformed input.
   static ChatMessageRecord? fromJson(Object? json) {
@@ -130,13 +130,13 @@ class ChatSessionRecord {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'agentKind': agentKind.name,
-    'title': title,
-    'createdAt': createdAt.toIso8601String(),
-    'messages': messages.map((m) => m.toJson()).toList(),
-    if (remoteSessionId != null) 'remoteSessionId': remoteSessionId,
-  };
+        'id': id,
+        'agentKind': agentKind.name,
+        'title': title,
+        'createdAt': createdAt.toIso8601String(),
+        'messages': messages.map((m) => m.toJson()).toList(),
+        if (remoteSessionId != null) 'remoteSessionId': remoteSessionId,
+      };
 
   /// Strictly parses one session entry; returns null on malformed input.
   static ChatSessionRecord? fromJson(Object? json) {
@@ -164,7 +164,8 @@ class ChatSessionRecord {
       title: title is String ? title : '',
       createdAt: createdAt,
       messages: messages,
-      remoteSessionId: remoteSessionId is String ? remoteSessionId : null,
+      remoteSessionId:
+          remoteSessionId is String ? remoteSessionId : null,
     );
   }
 }

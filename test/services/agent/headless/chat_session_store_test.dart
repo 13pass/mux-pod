@@ -14,16 +14,16 @@ void main() {
   });
 
   ChatMessageRecord userMessage(String text) => ChatMessageRecord(
-    role: ChatRole.user,
-    text: text,
-    timestamp: DateTime.utc(2026, 8, 8, 12),
-  );
+        role: ChatRole.user,
+        text: text,
+        timestamp: DateTime.utc(2026, 8, 8, 12),
+      );
 
   ChatMessageRecord assistantMessage(String text) => ChatMessageRecord(
-    role: ChatRole.assistant,
-    text: text,
-    timestamp: DateTime.utc(2026, 8, 8, 12, 1),
-  );
+        role: ChatRole.assistant,
+        text: text,
+        timestamp: DateTime.utc(2026, 8, 8, 12, 1),
+      );
 
   group('ChatSessionStore', () {
     test('returns an empty list when nothing is stored', () async {
@@ -70,7 +70,10 @@ void main() {
       expect(sessions[0].messages[0].role, ChatRole.user);
       expect(sessions[0].messages[0].text, 'summarize the repo');
       expect(sessions[0].messages[1].role, ChatRole.assistant);
-      expect(sessions[0].messages[0].timestamp, DateTime.utc(2026, 8, 8, 12));
+      expect(
+        sessions[0].messages[0].timestamp,
+        DateTime.utc(2026, 8, 8, 12),
+      );
     });
 
     test('truncates long derived titles', () async {
@@ -99,11 +102,8 @@ void main() {
 
     test('keeps at most 50 sessions, dropping the oldest', () async {
       for (var i = 0; i < 55; i++) {
-        await store.createSession(
-          'conn-1',
-          AgentKind.claudeCode,
-          title: 'chat $i',
-        );
+        await store.createSession('conn-1', AgentKind.claudeCode,
+            title: 'chat $i');
       }
       final sessions = await store.load('conn-1', AgentKind.claudeCode);
       expect(sessions, hasLength(50));
@@ -151,8 +151,8 @@ void main() {
       SharedPreferences.setMockInitialValues({
         'remote_ui_chat_sessions_conn-1_codex':
             '[{"broken": true}, {"id": "s-1", "agentKind": "codex", '
-            '"title": "ok", "createdAt": "2026-08-08T12:00:00.000Z", '
-            '"messages": []}]',
+                '"title": "ok", "createdAt": "2026-08-08T12:00:00.000Z", '
+                '"messages": []}]',
       });
       final sessions = await store.load('conn-1', AgentKind.codex);
       expect(sessions, hasLength(1));
