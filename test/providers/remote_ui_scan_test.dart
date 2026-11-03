@@ -86,6 +86,27 @@ void main() {
       expect(scan.detail, ' | scan: 1 panes, 1 command(s) resolved');
     });
 
+    test('orders agents most recent first, unknown starts last', () {
+      final scan = RemoteUiNotifier.scanPanes([
+        const AgentPaneInfo(id: 'a', command: 'vibe', agentStartedAtMs: 100),
+        const AgentPaneInfo(id: 'b', command: 'claude'),
+        const AgentPaneInfo(id: 'c', command: 'vibe', agentStartedAtMs: 300),
+        const AgentPaneInfo(id: 'd', command: 'vibe-rs', agentStartedAtMs: 300),
+        const AgentPaneInfo(id: 'e', command: 'droid'),
+      ], null);
+      // Newest start at the top; equal starts keep scan order;
+      // unknown starts at the end in scan order.
+      expect(scan.agents.map((a) => a.pane.id).toList(), [
+        'c',
+        'd',
+        'a',
+        'b',
+        'e',
+      ]);
+      // No focused pane: the most recent session is the target.
+      expect(scan.target!.pane.id, 'c');
+    });
+
     test('panes without a resolved command count as unresolved', () {
       final scan = RemoteUiNotifier.scanPanes([
         const AgentPaneInfo(id: 'w5:p2'),

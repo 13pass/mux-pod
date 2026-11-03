@@ -264,16 +264,34 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         agents.add(DetectedAgent(pane: pane, adapter: adapter));
       }
     }
+    // Most recent session first (agent process start time, newest at
+    // the top); panes without a known start keep their scan order at
+    // the end. The index tiebreak keeps equal keys stable.
+    final indexed = [
+      for (var i = 0; i < agents.length; i++) (index: i, agent: agents[i]),
+    ];
+    indexed.sort((a, b) {
+      final aMs = a.agent.pane.agentStartedAtMs;
+      final bMs = b.agent.pane.agentStartedAtMs;
+      if (aMs != null && bMs != null && aMs != bMs) {
+        return bMs.compareTo(aMs);
+      }
+      if (aMs != null && bMs == null) return -1;
+      if (aMs == null && bMs != null) return 1;
+      return a.index.compareTo(b.index);
+    });
+    final sorted = [for (final entry in indexed) entry.agent];
     DetectedAgent? target;
     if (paneId != null) {
-      for (final agent in agents) {
+      for (final agent in sorted) {
         if (agent.pane.id == paneId) {
           target = agent;
           break;
         }
       }
     } else {
-      target = agents.isEmpty ? null : agents.first;
+      // No focused pane: the most recent session is the best guess.
+      target = sorted.isEmpty ? null : sorted.first;
     }
     var resolved = 0;
     for (final pane in panes) {
@@ -296,7 +314,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     detail.write(
       ' | scan: ${panes.length} panes, $resolved command(s) resolved',
     );
-    return (agents: agents, target: target, detail: detail.toString());
+    return (agents: sorted, target: target, detail: detail.toString());
   }
 
   /// Detects which of [paneIds] run a known AI agent. Used by the

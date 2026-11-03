@@ -35,6 +35,15 @@ class AgentPaneInfo {
   /// "blocked", "idle"), null when the backend has none (tmux).
   final String? agentStatus;
 
+  /// Pid of the pane's agent process (herdr foreground list), null
+  /// when unknown.
+  final int? agentPid;
+
+  /// Epoch milliseconds (server clock) when the agent process started,
+  /// null when unknown. Powers the session-start datetime and the
+  /// most-recent-first ordering.
+  final int? agentStartedAtMs;
+
   const AgentPaneInfo({
     required this.id,
     this.command,
@@ -43,6 +52,8 @@ class AgentPaneInfo {
     this.tab,
     this.title,
     this.agentStatus,
+    this.agentPid,
+    this.agentStartedAtMs,
   });
 
   /// Human label: workspace, tab and pane title joined with dots, e.g.
@@ -458,7 +469,8 @@ class HerdrPaneIO implements PaneIO {
   /// path was slow and flaky over the shared terminal connection).
   /// Returns null when the batch could not be parsed, so callers can
   /// fall back to per-pane probes.
-  Future<Map<String, String>?> _batchForegroundCommands(
+  /// Parsed foreground pick per pane: process name + pid.
+  Future<Map<String, ({String name, int? pid})>?> _batchForegroundCommands(
     List<String> ids,
   ) async {
     if (ids.isEmpty) return const {};
@@ -488,7 +500,7 @@ class HerdrPaneIO implements PaneIO {
     final marker = RegExp(r'<<<MUXPOD:([^>]+)>>>');
     final matches = marker.allMatches(out.stdout).toList();
     if (matches.isEmpty) return null;
-    final commands = <String, String>{};
+    final commands = <String, ({String name, int? pid})>{};
     for (var i = 0; i < matches.length; i++) {
       final paneId = matches[i].group(1)!.trim();
       final start = matches[i].end;
@@ -510,8 +522,8 @@ class HerdrPaneIO implements PaneIO {
             : null;
         // Same agent-first picking as [currentCommand]: herdr may list
         // lingering helpers (xdg-open) ahead of the pane's agent.
-        final name = _pickForegroundProcessName(processes);
-        if (name != null) commands[paneId] = name;
+        final pick = _pickForegroundProcess(processes);
+        if (pick != null) commands[paneId] = pick;
       } on Object {
         // Unparseable chunk: leave this pane unresolved.
       }
@@ -519,17 +531,55 @@ class HerdrPaneIO implements PaneIO {
     return commands;
   }
 
+  /// Resolves the start time of every [pids] process in ONE exec:
+  /// the server epoch followed by `ps etimes` (elapsed seconds) per
+  /// pid, so the list can show a session-start datetime and sort
+  /// most-recent-first. herdr's snapshot carries no timestamps.
+  /// Best effort: pids missing from the output stay unknown.
+  Future<Map<int, int>> _batchProcessStartTimes(List<int> pids) async {
+    if (pids.isEmpty) return const {};
+    try {
+      final out = await _transport.execWithExitCode(
+        'echo \$(date +%s); ps -o pid=,etimes= -p ${pids.join(' ')}',
+        timeout: _execTimeout,
+      );
+      if (out.stdout.trim().isEmpty) return const {};
+      final lines = out.stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
+      if (lines.isEmpty) return const {};
+      final nowEpoch = int.tryParse(lines.first);
+      if (nowEpoch == null) return const {};
+      final started = <int, int>{};
+      for (final line in lines.skip(1)) {
+        final parts = line.split(RegExp(r'\s+'));
+        if (parts.length < 2) continue;
+        final pid = int.tryParse(parts[0]);
+        final elapsed = int.tryParse(parts[1]);
+        if (pid == null || elapsed == null) continue;
+        started[pid] = (nowEpoch - elapsed) * 1000;
+      }
+      return started;
+    } on Object {
+      return const {};
+    }
+  }
+
   @override
   Future<List<AgentPaneInfo>> listPanes() async {
     final snapshot = await _snapshotPanes();
-    // Panes herdr itself reports an agent for need no process probe.
-    final probeIds = <String>[
-      for (final pane in snapshot.panes)
-        if (!snapshot.agentNames.containsKey(pane.id)) pane.id,
-    ];
-    final probed = await _batchForegroundCommands(probeIds);
+    // Probe EVERY pane in one batched exec: herdr's own report still
+    // wins for the agent NAME, but the probe also yields the agent
+    // process PID (needed for the session-start lookup) even on
+    // panes herdr reports itself.
+    final probed = await _batchForegroundCommands([
+      for (final pane in snapshot.panes) pane.id,
+    ]);
     if (probed == null) {
       // Batch failed (old herdr, odd shell): per-pane probes, bounded.
+      // No PID/start-time resolution on this path.
       final result = <AgentPaneInfo>[];
       for (final pane in snapshot.panes) {
         final reported = snapshot.agentNames[pane.id];
@@ -545,17 +595,23 @@ class HerdrPaneIO implements PaneIO {
       }
       return result;
     }
+    final startTimes = await _batchProcessStartTimes([
+      for (final pick in probed.values)
+        if (pick.pid != null) pick.pid!,
+    ]);
     return [
       for (final pane in snapshot.panes)
         AgentPaneInfo(
           id: pane.id,
           // herdr's own report wins over the foreground process name.
-          command: snapshot.agentNames[pane.id] ?? probed[pane.id],
+          command: snapshot.agentNames[pane.id] ?? probed[pane.id]?.name,
           path: pane.path,
           workspace: pane.workspace,
           tab: pane.tab,
           title: pane.title,
           agentStatus: snapshot.agentStatuses[pane.id] ?? pane.agentStatus,
+          agentPid: probed[pane.id]?.pid,
+          agentStartedAtMs: startTimes[probed[pane.id]?.pid],
         ),
     ];
   }
@@ -624,21 +680,30 @@ class HerdrPaneIO implements PaneIO {
   /// else the first entry. Names normalize like [currentCommand]:
   /// display names such as "Vibe CLI" reduce to their first word
   /// lowercased ("vibe").
-  static String? _pickForegroundProcessName(List? processes) {
+  static String? _pickForegroundProcessName(List? processes) =>
+      _pickForegroundProcess(processes)?.name;
+
+  /// Same as [_pickForegroundProcessName] but also returns the pid of
+  /// the picked entry (for the session-start lookup).
+  static ({String name, int? pid})? _pickForegroundProcess(List? processes) {
     if (processes == null || processes.isEmpty) return null;
-    final names = <String>[];
+    final picked = <({String name, int? pid})>[];
     for (final entry in processes) {
       if (entry is! Map<String, dynamic>) continue;
       final name = entry['name'];
       if (name is String && name.isNotEmpty) {
-        names.add(name.split(' ').first.toLowerCase());
+        final pid = entry['pid'];
+        picked.add((
+          name: name.split(' ').first.toLowerCase(),
+          pid: pid is int ? pid : null,
+        ));
       }
     }
-    if (names.isEmpty) return null;
-    for (final name in names) {
-      if (AgentRegistry.detect(name) != null) return name;
+    if (picked.isEmpty) return null;
+    for (final entry in picked) {
+      if (AgentRegistry.detect(entry.name) != null) return entry;
     }
-    return names.first;
+    return picked.first;
   }
 
   @override

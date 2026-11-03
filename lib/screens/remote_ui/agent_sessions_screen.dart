@@ -236,9 +236,44 @@ class _AgentSessionsScreenState extends ConsumerState<AgentSessionsScreen> {
   }
 }
 
+/// Session-start datetime for a card: "17:24" when the agent started
+/// today, "Nov 1 · 17:24" this year, "Nov 1, 2025 · 17:24" older.
+/// Null when the start time is unknown. [now] is injectable for tests.
+String? formatAgentSessionStart(int? epochMs, {DateTime? now}) {
+  if (epochMs == null) return null;
+  final start = DateTime.fromMillisecondsSinceEpoch(epochMs);
+  final nowDate = now ?? DateTime.now();
+  String two(int n) => n.toString().padLeft(2, '0');
+  final hm = '${two(start.hour)}:${two(start.minute)}';
+  if (start.year == nowDate.year &&
+      start.month == nowDate.month &&
+      start.day == nowDate.day) {
+    return hm;
+  }
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final month = months[start.month - 1];
+  if (start.year == nowDate.year) {
+    return '$month ${start.day} · $hm';
+  }
+  return '$month ${start.day}, ${start.year} · $hm';
+}
+
 /// One session card: code icon, session title (the pane's
 /// workspace / tab / pane title), status dot + kind + "Remote control"
-/// caption, chevron.
+/// caption, start datetime, chevron.
 class _AgentSessionCard extends StatelessWidget {
   const _AgentSessionCard({
     super.key,
@@ -266,6 +301,10 @@ class _AgentSessionCard extends StatelessWidget {
     final title = agent.pane.label.isNotEmpty
         ? agent.pane.label
         : 'Pane ${agent.pane.id}';
+    final startedAtLabel = formatAgentSessionStart(
+      agent.pane.agentStartedAtMs,
+      now: DateTime.now(),
+    );
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -331,6 +370,13 @@ class _AgentSessionCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (startedAtLabel != null) ...[
+                Text(
+                  startedAtLabel,
+                  style: theme.textTheme.bodySmall?.copyWith(color: textMuted),
+                ),
+                const SizedBox(width: 2),
+              ],
               Icon(Icons.chevron_right, size: 20, color: textMuted),
             ],
           ),

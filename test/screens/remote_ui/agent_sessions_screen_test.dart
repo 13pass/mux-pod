@@ -39,6 +39,38 @@ Widget _buildApp(_FixedRemoteUiNotifier remote) {
 }
 
 void main() {
+  group('formatAgentSessionStart', () {
+    final now = DateTime(2026, 11, 3, 18, 0);
+
+    test('null epoch stays null', () {
+      expect(formatAgentSessionStart(null, now: now), isNull);
+    });
+
+    test('same-day start shows only the time', () {
+      final sameDay = DateTime(2026, 11, 3, 9, 5);
+      expect(
+        formatAgentSessionStart(sameDay.millisecondsSinceEpoch, now: now),
+        '09:05',
+      );
+    });
+
+    test('same-year start shows month, day and time', () {
+      final earlier = DateTime(2026, 10, 31, 17, 30);
+      expect(
+        formatAgentSessionStart(earlier.millisecondsSinceEpoch, now: now),
+        'Oct 31 · 17:30',
+      );
+    });
+
+    test('older-year start includes the year', () {
+      final old = DateTime(2025, 12, 24, 8, 15);
+      expect(
+        formatAgentSessionStart(old.millisecondsSinceEpoch, now: now),
+        'Dec 24, 2025 · 08:15',
+      );
+    });
+  });
+
   testWidgets('lists one Claude-style card per detected agent', (tester) async {
     final remote = _FixedRemoteUiNotifier(
       RemoteUiState(
@@ -72,6 +104,8 @@ void main() {
 
     // Session titles use the human pane labels.
     expect(find.text('vibe · muxpod'), findsOneWidget);
+    // Cards carry the session-start datetime when known.
+    expect(find.textContaining('Remote control'), findsWidgets);
     expect(find.text('Dintel · langfuse'), findsOneWidget);
     // Claude-mobile caption row: kind + Remote control (+ status).
     expect(find.textContaining('Vibe · Remote control'), findsOneWidget);

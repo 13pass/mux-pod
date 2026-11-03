@@ -29,29 +29,38 @@ const _snapshotJson = '''
 }}}
 ''';
 
-String _processInfoJson(String name) =>
+String _processInfoJson(String name, {int pid = 42}) =>
     '''
 {"id":"cli:pane:process_info","result":{"process_info":{
   "pane_id":"x","shell_pid":1,
-  "foreground_processes":[{"name":"$name","cmdline":"$name","pid":42,"cwd":"/tmp"}]
+  "foreground_processes":[{"name":"$name","cmdline":"$name","pid":$pid,"cwd":"/tmp"}]
 }}}
 ''';
 
 void main() {
   group('HerdrPaneIO', () {
-    test('listPanes resolves foregrounds in ONE batched exec and merges '
-        'herdr agent reports', () async {
+    test('listPanes resolves foregrounds and start times in batched '
+        'execs and merges herdr agent reports', () async {
       final t = FakeAgentTransport();
       final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
       t.onExec = (command) {
         if (command.startsWith('test -x -- ')) return ''; // bin verification
         if (command.contains('api snapshot')) return _snapshotJson;
         if (command.contains('<<<MUXPOD')) {
-          // Batched loop output, framed per pane.
+          // Every pane is probed: the PID is needed for the
+          // session-start lookup even on panes herdr reports itself.
           return '\n<<<MUXPOD:w5:p1>>>'
-              '${_processInfoJson('zsh')}'
+              '${_processInfoJson('zsh', pid: 11)}'
               '\n<<<MUXPOD:w5:p3>>>'
-              '${_processInfoJson('Vibe CLI')}';
+              '${_processInfoJson('Vibe CLI', pid: 42)}'
+              '\n<<<MUXPOD:w5:p4>>>'
+              '${_processInfoJson('clawpatrol', pid: 7)}'
+              '\n<<<MUXPOD:w5:p5>>>'
+              '${_processInfoJson('vibe-rs', pid: 9)}';
+        }
+        if (command.contains('ps -o pid=,etimes=')) {
+          // Server epoch then per-pid elapsed seconds.
+          return '1730000000\n11 100\n42 500\n7 3600\n9 50\n';
         }
         throw StateError('unexpected: $command');
       };
@@ -62,16 +71,22 @@ void main() {
       expect(panes[0], isA<AgentPaneInfo>());
       expect(panes[0].id, 'w5:p1');
       expect(panes[0].command, 'zsh');
+      expect(panes[0].agentPid, 11);
+      expect(panes[0].agentStartedAtMs, (1730000000 - 100) * 1000);
       expect(panes[1].id, 'w5:p3');
       // "Vibe CLI" reduces to its first word for detection.
       expect(panes[1].command, 'vibe');
+      expect(panes[1].agentPid, 42);
+      expect(panes[1].agentStartedAtMs, (1730000000 - 500) * 1000);
       expect(panes[1].path, '/home/vincent/agents/vibe');
       // Workspace / tab labels resolve through the snapshot.
       expect(panes[1].workspace, 'vibe');
       expect(panes[1].tab, 'muxpod');
-      // herdr's own report identifies w5:p4 (its foreground process is a
-      // wrapper); no probe was issued for it and the report wins.
+      // herdr's own report wins for the NAME (the probe saw the
+      // clawpatrol wrapper); the probe still supplies the PID.
       expect(panes[2].command, 'claude');
+      expect(panes[2].agentPid, 7);
+      expect(panes[2].agentStartedAtMs, (1730000000 - 3600) * 1000);
       expect(panes[2].agentStatus, 'idle');
       // The herdr-vibe plugin reports Vibe sessions as "mistral-vibe".
       expect(panes[3].command, 'mistral-vibe');
@@ -80,15 +95,20 @@ void main() {
       // The custom herdr binary path is used (after the test -x probe).
       expect(t.execCommands.first, 'test -x -- /usr/local/bin/herdr');
       expect(t.execCommands[1], '/usr/local/bin/herdr api snapshot');
-      // Exactly ONE process-info exec for both probed panes.
+      // Exactly ONE process-info exec for all four panes, and ONE ps
+      // exec for the start times.
       final probes = t.execCommands
           .where((c) => c.contains('process-info'))
           .toList();
       expect(probes, hasLength(1));
-      expect(probes.single, contains('w5:p1'));
-      expect(probes.single, contains('w5:p3'));
-      expect(probes.single, isNot(contains('w5:p4')));
-      expect(probes.single, isNot(contains('w5:p5')));
+      for (final id in ['w5:p1', 'w5:p3', 'w5:p4', 'w5:p5']) {
+        expect(probes.single, contains(id));
+      }
+      final psCalls = t.execCommands
+          .where((c) => c.contains('ps -o pid=,etimes='))
+          .toList();
+      expect(psCalls, hasLength(1));
+      expect(psCalls.single, contains('11 42 7 9'));
     });
 
     test(
