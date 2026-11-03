@@ -269,7 +269,6 @@ class _AgentPaneConsoleScreenState
     );
   }
 
-  /// Loading area that says WHICH phase is running, so a hang is visible
   /// Build stamp (GIT_REF dart-define) so any screenshot identifies the
   /// exact build under test.
   static const _gitRef = String.fromEnvironment(

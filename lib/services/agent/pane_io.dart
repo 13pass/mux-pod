@@ -599,8 +599,7 @@ class HerdrPaneIO implements PaneIO {
 
   @override
   Future<String?> currentCommand(String paneId) async {
-    // Pane ids are herdr-generated (`w5:p3`) — safe unquoted, same as
-    // [HerdrCommands.paneSendText].
+    if (!_safePaneId(paneId)) return null;
     final bin = await _bin();
     final info = await _transport.execWithExitCode(
       '$bin pane process-info --pane $paneId',
@@ -644,6 +643,7 @@ class HerdrPaneIO implements PaneIO {
 
   @override
   Future<String> readRecentContent(String paneId, {int lines = 40}) async {
+    if (!_safePaneId(paneId)) return '';
     final bin = await _bin();
     try {
       final out = await _transport.execWithExitCode(
@@ -658,10 +658,9 @@ class HerdrPaneIO implements PaneIO {
     }
   }
 
-  /// Strips the huge right padding TUI output carries (full-width
-  /// status bars etc.) so preview lines don't wrap on a phone.
   @override
   Future<void> typeLiteral(String paneId, String text) async {
+    if (!_safePaneId(paneId)) return;
     final bin = await _bin();
     await _transport.sendKeysCommand(
       '$bin pane send-text $paneId ${_shellQuote(text)}',
@@ -670,18 +669,27 @@ class HerdrPaneIO implements PaneIO {
 
   @override
   Future<void> pressEnter(String paneId) async {
+    if (!_safePaneId(paneId)) return;
     final bin = await _bin();
     await _transport.sendKeysCommand('$bin pane send-keys $paneId Enter');
   }
 
   @override
   Future<void> pressInterrupt(String paneId) async {
+    if (!_safePaneId(paneId)) return;
     final bin = await _bin();
     await _transport.sendKeysCommand('$bin pane send-keys $paneId C-c');
   }
 
   static String _shellQuote(String value) =>
       "'${value.replaceAll("'", r"'\''")}'";
+
+  /// Pane ids are embedded into herdr CLI commands. They come from the
+  /// server's own snapshot (herdr generates `w5:p3`), but a hostile or
+  /// compromised server could craft one - never embed an id that is
+  /// not plainly safe. Same pattern as the batched scan guard.
+  static bool _safePaneId(String paneId) =>
+      RegExp(r'^[A-Za-z0-9:_-]+$').hasMatch(paneId);
 
   static dynamic resultOf(Map<String, dynamic> envelope) => envelope['result'];
 }

@@ -219,6 +219,22 @@ void main() {
       expect(await io.readRecentContent('w5:p3'), isEmpty);
     });
 
+    test('commands with an unsafe pane id are never executed', () async {
+      final t = FakeAgentTransport();
+      final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+      // A hostile snapshot could craft a pane id with shell
+      // metacharacters: it must not reach any herdr command.
+      const evil = "w5:p3; touch /tmp/pwned";
+      t.onExec = (_) => '';
+      expect(await io.currentCommand(evil), isNull);
+      expect(await io.readRecentContent(evil), isEmpty);
+      await io.typeLiteral(evil, 'hello');
+      await io.pressEnter(evil);
+      await io.pressInterrupt(evil);
+      expect(t.sentKeyCommands, isEmpty);
+      expect(t.execCommands, isEmpty); // not even the bin probe ran
+    });
+
     test(
       'currentCommand prefers a known agent among the foreground list',
       () async {
