@@ -3,8 +3,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_muxpod/providers/remote_ui_provider.dart';
 import 'package:flutter_muxpod/screens/remote_ui/agent_pane_console_screen.dart';
 import 'package:flutter_muxpod/services/agent/agent_types.dart';
-import 'package:flutter_muxpod/services/agent/claude_code_adapter.dart';
-import 'package:flutter_muxpod/services/agent/pane_io.dart';
 import 'package:flutter_muxpod/services/agent/vibe_adapter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

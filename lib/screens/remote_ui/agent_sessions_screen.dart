@@ -226,6 +226,7 @@ class _AgentSessionsScreenState extends ConsumerState<AgentSessionsScreen> {
           return _AgentSessionCard(
             key: Key('agent_sessions.card_${agent.pane.id}'),
             agent: agent,
+            lastActivityMs: remote.paneActivityMs[agent.pane.id],
             border: border,
             textMuted: textMuted,
             onTap: () => unawaited(_openConsole(agent)),
@@ -278,12 +279,17 @@ class _AgentSessionCard extends StatelessWidget {
   const _AgentSessionCard({
     super.key,
     required this.agent,
+    required this.lastActivityMs,
     required this.border,
     required this.textMuted,
     required this.onTap,
   });
 
   final DetectedAgent agent;
+
+  /// Last real activity (app interaction or observed state change),
+  /// null when only the session start is known.
+  final int? lastActivityMs;
   final Color border;
   final Color textMuted;
   final VoidCallback onTap;
@@ -302,7 +308,7 @@ class _AgentSessionCard extends StatelessWidget {
         ? agent.pane.label
         : 'Pane ${agent.pane.id}';
     final startedAtLabel = formatAgentSessionStart(
-      agent.pane.agentStartedAtMs,
+      lastActivityMs ?? agent.pane.agentStartedAtMs,
       now: DateTime.now(),
     );
     return Material(

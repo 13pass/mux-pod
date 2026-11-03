@@ -54,6 +54,12 @@ class RemoteUiState {
   /// known agent), powering the console's agent switcher.
   final List<DetectedAgent> detectedAgents;
 
+  /// Last real activity per pane id, epoch ms: the newer of the app
+  /// interaction (message/interrupt/open) and the last observed agent
+  /// state change. Panes without either fall back to the session
+  /// start. Powers the session-list ordering and the card datetime.
+  final Map<String, int> paneActivityMs;
+
   /// Last known agent configuration.
   final AgentConfig config;
 
@@ -81,6 +87,7 @@ class RemoteUiState {
     this.detectDetail,
     this.paneContent,
     this.detectedAgents = const [],
+    this.paneActivityMs = const {},
     this.config = const AgentConfig(),
     this.isBusy = false,
     this.error,
@@ -101,6 +108,7 @@ class RemoteUiState {
     Object? detectDetail = _unset,
     Object? paneContent = _unset,
     List<DetectedAgent>? detectedAgents,
+    Map<String, int>? paneActivityMs,
     AgentConfig? config,
     bool? isBusy,
     Object? error = _unset,
@@ -130,6 +138,7 @@ class RemoteUiState {
           ? this.paneContent
           : paneContent as String?,
       detectedAgents: detectedAgents ?? this.detectedAgents,
+      paneActivityMs: paneActivityMs ?? this.paneActivityMs,
       config: config ?? this.config,
       isBusy: isBusy ?? this.isBusy,
       error: error == _unset ? this.error : error as String?,
@@ -155,8 +164,29 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   /// the server sequence is the fallback.
   final Map<String, int> _paneInteractionMs = {};
 
+  /// Last observed herdr state-change sequence per pane and the wall
+  /// clock when that change was OBSERVED (a seq bump between two
+  /// polls means the agent was active moments ago). atMs stays null
+  /// until the first observed change.
+  final Map<String, ({int seq, int? atMs})> _paneSeqClocks = {};
+
   void _touchInteraction(String paneId) {
     _paneInteractionMs[paneId] = DateTime.now().millisecondsSinceEpoch;
+  }
+
+  void _observeSeqChanges(List<AgentPaneInfo> panes) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    for (final pane in panes) {
+      final seq = pane.agentStateSeq;
+      if (seq == null) continue;
+      final known = _paneSeqClocks[pane.id];
+      if (known == null) {
+        // First sight: the change happened at an unknown past time.
+        _paneSeqClocks[pane.id] = (seq: seq, atMs: null);
+      } else if (known.seq != seq) {
+        _paneSeqClocks[pane.id] = (seq: seq, atMs: nowMs);
+      }
+    }
   }
 
   /// Whether this provider owns `_client` (dedicated connection). When the
@@ -217,11 +247,22 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         return;
       }
 
-      final scan = scanPanes(
-        await paneIO.listPanes(),
-        paneId,
-        interactionMs: _paneInteractionMs,
-      );
+      final panes = await paneIO.listPanes();
+      // Pin agent state changes to the wall clock: when a pane's herdr
+      // sequence moved since the last look, its last activity is NOW
+      // (poll granularity). First sight stays unpinned - the change
+      // happened at some unknown past time.
+      _observeSeqChanges(panes);
+      final activity = <String, int>{..._paneInteractionMs};
+      for (final entry in _paneSeqClocks.entries) {
+        final atMs = entry.value.atMs;
+        if (atMs == null) continue;
+        final previous = activity[entry.key];
+        if (previous == null || atMs > previous) {
+          activity[entry.key] = atMs;
+        }
+      }
+      final scan = scanPanes(panes, paneId, activityMs: activity);
       final target = scan.target;
       var config = const AgentConfig();
       if (target != null) {
@@ -243,6 +284,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
             ? null
             : target.pane.label,
         detectedAgents: scan.agents,
+        paneActivityMs: activity,
         detectDetail: scan.detail,
         // Cleared per open: the next read fills it with THIS pane's
         // recent output (the previous agent's preview must not leak).
@@ -277,7 +319,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   scanPanes(
     List<AgentPaneInfo> panes,
     String? paneId, {
-    Map<String, int> interactionMs = const {},
+    Map<String, int> activityMs = const {},
   }) {
     final agents = <DetectedAgent>[];
     for (final pane in panes) {
@@ -286,33 +328,21 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         agents.add(DetectedAgent(pane: pane, adapter: adapter));
       }
     }
-    // Last interaction first, most precise signal first:
-    // 1. app interaction time (the user messaged/opened that pane),
-    // 2. herdr's global state-change sequence (server-side activity),
-    // 3. session start (newest first); unknown starts keep their scan
-    // order at the end. The index tiebreak keeps equal keys stable.
+    // Last activity first, all keys on ONE wall-clock scale:
+    // 1. observed activity time (app interaction or a state-change
+    //    pinned by the poll),
+    // 2. else session start (newest first),
+    // 3. unknowns keep their scan order at the end. The raw herdr
+    // sequence never sorts by itself - a stale September sequence
+    // must not outrank a November session.
     final indexed = [
       for (var i = 0; i < agents.length; i++) (index: i, agent: agents[i]),
     ];
+    int? key(int i) =>
+        activityMs[agents[i].pane.id] ?? agents[i].pane.agentStartedAtMs;
     indexed.sort((a, b) {
-      final aTouched = interactionMs[a.agent.pane.id];
-      final bTouched = interactionMs[b.agent.pane.id];
-      if (aTouched != null && bTouched != null && aTouched != bTouched) {
-        return bTouched.compareTo(aTouched);
-      }
-      if (aTouched != null && bTouched == null) return -1;
-      if (aTouched == null && bTouched != null) return 1;
-      final aSeq = a.agent.pane.agentStateSeq;
-      final bSeq = b.agent.pane.agentStateSeq;
-      // Group 0 (known sequence) ranks before group 1, by sequence
-      // descending: the most recently active agent first.
-      if (aSeq != null && bSeq != null && aSeq != bSeq) {
-        return bSeq.compareTo(aSeq);
-      }
-      if (aSeq != null && bSeq == null) return -1;
-      if (aSeq == null && bSeq != null) return 1;
-      final aMs = a.agent.pane.agentStartedAtMs;
-      final bMs = b.agent.pane.agentStartedAtMs;
+      final aMs = key(a.index);
+      final bMs = key(b.index);
       if (aMs != null && bMs != null && aMs != bMs) {
         return bMs.compareTo(aMs);
       }
@@ -572,6 +602,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     _transport = null;
     _ownsClient = false;
     _paneInteractionMs.clear();
+    _paneSeqClocks.clear();
     if (client != null) await client.disconnect();
     state = const RemoteUiState();
   }
