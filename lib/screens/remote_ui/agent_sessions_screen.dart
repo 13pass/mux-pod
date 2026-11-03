@@ -45,6 +45,15 @@ class _AgentSessionsScreenState extends ConsumerState<AgentSessionsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_scan());
     });
+    _startRescanTimer();
+  }
+
+  /// Slow rescan so statuses stay current. MUST be stopped while a
+  /// chat console is pushed on top: the list and the console share one
+  /// provider, and a rescan (openPane with no pane id) would hijack
+  /// the console's selected agent mid-chat.
+  void _startRescanTimer() {
+    _rescanTimer?.cancel();
     _rescanTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
       final remote = ref.read(remoteUiProvider);
@@ -63,7 +72,8 @@ class _AgentSessionsScreenState extends ConsumerState<AgentSessionsScreen> {
     try {
       await ref
           .read(remoteUiProvider.notifier)
-          .openPane(widget.connectionId, null)
+          // readContent=false: the list shows statuses, not transcripts.
+          .openPane(widget.connectionId, null, readContent: false)
           .timeout(const Duration(seconds: 60));
     } on Object {
       // Failures surface through RemoteUiState.error in the list body.
@@ -72,6 +82,7 @@ class _AgentSessionsScreenState extends ConsumerState<AgentSessionsScreen> {
   }
 
   Future<void> _openConsole(DetectedAgent agent) async {
+    _rescanTimer?.cancel();
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AgentPaneConsoleScreen(
@@ -81,8 +92,11 @@ class _AgentSessionsScreenState extends ConsumerState<AgentSessionsScreen> {
         ),
       ),
     );
-    // The console may have changed what runs where: rescan on return.
-    if (mounted) unawaited(_scan());
+    if (!mounted) return;
+    // The console may have changed what runs where: rescan on return
+    // and keep the list live again.
+    _startRescanTimer();
+    unawaited(_scan());
   }
 
   @override
@@ -107,9 +121,17 @@ class _AgentSessionsScreenState extends ConsumerState<AgentSessionsScreen> {
         ],
       ),
       body: SafeArea(
-        child: _opening || remote.isBusy
-            ? _buildLoading(textMuted)
-            : _buildBody(context, remote, border, textMuted),
+        child: Column(
+          children: [
+            if (remote.isBusy && !_opening)
+              const LinearProgressIndicator(minHeight: 2),
+            Expanded(
+              child: _opening
+                  ? _buildLoading(textMuted)
+                  : _buildBody(context, remote, border, textMuted),
+            ),
+          ],
+        ),
       ),
     );
   }

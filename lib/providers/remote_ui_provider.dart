@@ -184,7 +184,13 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   /// points the state at the agent running in [paneId] — or the first
   /// detected agent pane when null. The scan also fills
   /// [RemoteUiState.detectedAgents] for the console's agent switcher.
-  Future<void> openPane(String connectionId, String? paneId) async {
+  /// [readContent] also loads the pane transcript (the chat console
+  /// wants it; the sessions list does not).
+  Future<void> openPane(
+    String connectionId,
+    String? paneId, {
+    bool readContent = true,
+  }) async {
     await _ensureConnected(connectionId);
     if (state.connectionId != connectionId) return;
 
@@ -229,8 +235,10 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
             ? 'No AI agent detected in pane $paneId'
             : null,
       );
-      if (target != null) {
-        // Best effort; never blocks the console open.
+      if (target != null && readContent) {
+        // Best effort; never blocks the console open. The sessions list
+        // scans with readContent=false: it shows statuses, not
+        // transcripts.
         unawaited(readPaneContent());
       }
     } on Object catch (e) {

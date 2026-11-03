@@ -27,7 +27,11 @@ class _FixedRemoteUiNotifier extends RemoteUiNotifier {
   }
 
   @override
-  Future<void> openPane(String connectionId, String? paneId) async {
+  Future<void> openPane(
+    String connectionId,
+    String? paneId, {
+    bool readContent = true,
+  }) async {
     calls.add('openPane($connectionId, $paneId)');
   }
 
@@ -55,7 +59,11 @@ class _BuildPhaseRemoteUiNotifier extends RemoteUiNotifier {
   RemoteUiState build() => initial;
 
   @override
-  Future<void> openPane(String connectionId, String? paneId) async {
+  Future<void> openPane(
+    String connectionId,
+    String? paneId, {
+    bool readContent = true,
+  }) async {
     final phase = SchedulerBinding.instance.schedulerPhase;
     if (phase == SchedulerPhase.persistentCallbacks) {
       throw StateError('openPane ran during the build phase: $phase');

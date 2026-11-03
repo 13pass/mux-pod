@@ -848,7 +848,7 @@
   },
   "termPinchToZoom": "Pinch to zoom in/out",
   "termAgentChat": "Agent chat",
-  "termAgentChatSubtitle": "Talk to the AI agent running in this pane",
+  "termAgentChatSubtitle": "Browse the AI agents running on this server",
   "termSettings": "Settings",
   "termSettingsSubtitle": "Font, theme, and other options",
   "termDisconnect": "Disconnect",

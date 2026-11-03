@@ -848,7 +848,7 @@
   },
   "termPinchToZoom": "ピンチでズームイン/アウト",
   "termAgentChat": "エージェントチャット",
-  "termAgentChatSubtitle": "このペインで動くAIエージェントと会話",
+  "termAgentChatSubtitle": "このサーバーで動くAIエージェントの一覧",
   "termSettings": "設定",
   "termSettingsSubtitle": "フォント・テーマなどのオプション",
   "termDisconnect": "切断",

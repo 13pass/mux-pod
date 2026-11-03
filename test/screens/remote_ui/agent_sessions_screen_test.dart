@@ -18,9 +18,16 @@ class _FixedRemoteUiNotifier extends RemoteUiNotifier {
   @override
   RemoteUiState build() => initial;
 
+  /// Emits a new state so ref.listen/watch see rescan activity.
+  void emit(RemoteUiState next) => state = next;
+
   @override
-  Future<void> openPane(String connectionId, String? paneId) async {
-    calls.add('openPane($connectionId, $paneId)');
+  Future<void> openPane(
+    String connectionId,
+    String? paneId, {
+    bool readContent = true,
+  }) async {
+    calls.add('openPane($connectionId, $paneId, readContent: $readContent)');
   }
 }
 
@@ -72,7 +79,7 @@ void main() {
       find.textContaining('Claude Code · Remote control · idle'),
       findsOneWidget,
     );
-    expect(remote.calls.first, 'openPane(c1, null)');
+    expect(remote.calls.first, 'openPane(c1, null, readContent: false)');
 
     // Tapping a card opens the chat console for that pane.
     await tester.tap(find.byKey(const Key('agent_sessions.card_w7:p2')));
@@ -91,5 +98,85 @@ void main() {
 
     expect(find.textContaining('No AI agents detected'), findsOneWidget);
     expect(find.byKey(const Key('agent_sessions.retry')), findsOneWidget);
+  });
+
+  testWidgets('rescans keep the list visible under a thin progress bar', (
+    tester,
+  ) async {
+    final remote = _FixedRemoteUiNotifier(
+      RemoteUiState(
+        connectionId: 'c1',
+        isConnected: true,
+        detectedAgents: [
+          DetectedAgent(
+            pane: const AgentPaneInfo(
+              id: 'w5:p3',
+              command: 'vibe',
+              workspace: 'vibe',
+              tab: 'muxpod',
+            ),
+            adapter: VibeAdapter(),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+
+    // A rescan goes busy: the card must stay on screen (no full-screen
+    // loading flicker), only the progress bar appears.
+    remote.emit(remote.initial.copyWith(isBusy: true));
+    await tester.pump();
+    expect(find.text('vibe · muxpod'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('list rescans stop while a chat console is open on top', (
+    tester,
+  ) async {
+    final remote = _FixedRemoteUiNotifier(
+      RemoteUiState(
+        connectionId: 'c1',
+        isConnected: true,
+        detectedAgents: [
+          DetectedAgent(
+            pane: const AgentPaneInfo(
+              id: 'w5:p3',
+              command: 'vibe',
+              workspace: 'vibe',
+              tab: 'muxpod',
+            ),
+            adapter: VibeAdapter(),
+          ),
+          DetectedAgent(
+            pane: const AgentPaneInfo(
+              id: 'w7:p2',
+              command: 'claude',
+              workspace: 'Dintel',
+              tab: 'langfuse',
+            ),
+            adapter: ClaudeCodeAdapter(),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(_buildApp(remote));
+    await tester.pumpAndSettle();
+    final scansBeforeConsole = remote.calls
+        .where((c) => c.contains('openPane'))
+        .length;
+
+    await tester.tap(find.byKey(const Key('agent_sessions.card_w7:p2')));
+    await tester.pumpAndSettle();
+
+    // Well past the 10s rescan period: the only extra scan is the
+    // console's own initial open (for its pane) - the LIST must not
+    // rescan while the console owns the shared provider state.
+    await tester.pump(const Duration(seconds: 25));
+    expect(
+      remote.calls.where((c) => c.contains('openPane')).length,
+      scansBeforeConsole + 1,
+    );
+    expect(remote.calls.last, 'openPane(c1, w7:p2, readContent: true)');
   });
 }
