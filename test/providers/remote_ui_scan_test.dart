@@ -86,6 +86,21 @@ void main() {
       expect(scan.detail, ' | scan: 1 panes, 1 command(s) resolved');
     });
 
+    test('app interactions outrank server-side activity', () {
+      final scan = RemoteUiNotifier.scanPanes(
+        [
+          const AgentPaneInfo(id: 'a', command: 'vibe', agentStateSeq: 60),
+          const AgentPaneInfo(id: 'b', command: 'claude', agentStateSeq: 10),
+        ],
+        null,
+        interactionMs: {'b': 123, 'a': 45},
+      );
+      // The user interacted with 'b' most recently FROM THE APP: it
+      // ranks above the server-side busier agent.
+      expect(scan.agents.map((a) => a.pane.id).toList(), ['b', 'a']);
+      expect(scan.target!.pane.id, 'b');
+    });
+
     test('orders agents by last interaction (sequence) first', () {
       final scan = RemoteUiNotifier.scanPanes([
         // Old start, but the most recent interaction (highest seq).

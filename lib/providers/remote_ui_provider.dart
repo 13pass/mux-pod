@@ -148,6 +148,17 @@ class RemoteUiState {
 class RemoteUiNotifier extends Notifier<RemoteUiState> {
   SshClient? _client;
 
+  /// When the user last interacted with each pane FROM THE APP (message
+  /// sent, interrupt, console opened for it), pane id -> epoch ms.
+  /// herdr reports no timestamps and pre-plugin sessions carry no state
+  /// sequence at all, so this is the primary last-interaction signal;
+  /// the server sequence is the fallback.
+  final Map<String, int> _paneInteractionMs = {};
+
+  void _touchInteraction(String paneId) {
+    _paneInteractionMs[paneId] = DateTime.now().millisecondsSinceEpoch;
+  }
+
   /// Whether this provider owns `_client` (dedicated connection). When the
   /// terminal's live connection is reused, [_client] stays null and
   /// disconnects must leave that connection alone.
@@ -191,6 +202,9 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     String? paneId, {
     bool readContent = true,
   }) async {
+    // Opening a specific pane counts as an interaction (it reorders the
+    // session list); the server-wide scan (null) does not.
+    if (paneId != null) _touchInteraction(paneId);
     await _ensureConnected(connectionId);
     if (state.connectionId != connectionId) return;
 
@@ -203,7 +217,11 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         return;
       }
 
-      final scan = scanPanes(await paneIO.listPanes(), paneId);
+      final scan = scanPanes(
+        await paneIO.listPanes(),
+        paneId,
+        interactionMs: _paneInteractionMs,
+      );
       final target = scan.target;
       var config = const AgentConfig();
       if (target != null) {
@@ -256,7 +274,11 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   /// [paneId] (first detected agent when null), and the detection detail
   /// line for the console status. Pure; unit-tested directly.
   static ({List<DetectedAgent> agents, DetectedAgent? target, String detail})
-  scanPanes(List<AgentPaneInfo> panes, String? paneId) {
+  scanPanes(
+    List<AgentPaneInfo> panes,
+    String? paneId, {
+    Map<String, int> interactionMs = const {},
+  }) {
     final agents = <DetectedAgent>[];
     for (final pane in panes) {
       final adapter = AgentRegistry.detect(pane.command);
@@ -264,15 +286,22 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         agents.add(DetectedAgent(pane: pane, adapter: adapter));
       }
     }
-    // Last interaction first: herdr's global state-change sequence is
-    // the best proxy (every agent transition increments it). Agents
-    // herdr does not report (no sequence) sort after, by session start
-    // (newest first); unknown starts keep their scan order at the
-    // end. The index tiebreak keeps equal keys stable.
+    // Last interaction first, most precise signal first:
+    // 1. app interaction time (the user messaged/opened that pane),
+    // 2. herdr's global state-change sequence (server-side activity),
+    // 3. session start (newest first); unknown starts keep their scan
+    // order at the end. The index tiebreak keeps equal keys stable.
     final indexed = [
       for (var i = 0; i < agents.length; i++) (index: i, agent: agents[i]),
     ];
     indexed.sort((a, b) {
+      final aTouched = interactionMs[a.agent.pane.id];
+      final bTouched = interactionMs[b.agent.pane.id];
+      if (aTouched != null && bTouched != null && aTouched != bTouched) {
+        return bTouched.compareTo(aTouched);
+      }
+      if (aTouched != null && bTouched == null) return -1;
+      if (aTouched == null && bTouched != null) return 1;
       final aSeq = a.agent.pane.agentStateSeq;
       final bSeq = b.agent.pane.agentStateSeq;
       // Group 0 (known sequence) ranks before group 1, by sequence
@@ -542,6 +571,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     _paneIO = null;
     _transport = null;
     _ownsClient = false;
+    _paneInteractionMs.clear();
     if (client != null) await client.disconnect();
     state = const RemoteUiState();
   }
@@ -569,6 +599,7 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     final paneIO = _paneIO;
     final paneId = state.agentPaneId;
     if (paneIO == null || paneId == null) return;
+    _touchInteraction(paneId);
     state = state.copyWith(isBusy: true, error: null, notice: null);
     try {
       await paneIO.pressInterrupt(paneId);
@@ -608,6 +639,8 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
   /// agent's pane from the mobile composer instead of the terminal
   /// keyboard).
   Future<void> sendMessage(String message) async {
+    final paneId = state.agentPaneId;
+    if (paneId != null) _touchInteraction(paneId);
     await _apply((adapter, context) => adapter.sendMessage(context, message));
     // The typed message (and the first lines of the reply) land in the
     // pane a beat after send-keys: re-read the preview shortly.
