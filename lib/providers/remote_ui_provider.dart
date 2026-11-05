@@ -188,7 +188,12 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     if (paneIds.isEmpty) return;
     final paneIO = _paneIO;
     if (paneIO == null) return;
-    final tails = await paneIO.readRecentContents(paneIds);
+    // Short leash: detection must not hold the open/scan chain when
+    // the herdr daemon is slow on one pane - a skipped round is fine.
+    final tails = await paneIO.readRecentContents(
+      paneIds,
+      timeout: const Duration(seconds: 8),
+    );
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     for (final entry in tails.entries) {
       final hash = entry.value.hashCode;
@@ -288,6 +293,9 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         return;
       }
 
+      // NOTE: the agent's config (model/permissions) is no longer
+      // read here - the console does not manage it (chips removed in
+      // v25/v26) and the read added an exec to the open path.
       final panes = await paneIO.listPanes();
       // Pin pane changes to the wall clock: when a pane's sequence,
       // revision or CONTENT TAIL moved since the last look, its last
@@ -318,17 +326,6 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       }
       final scan = scanPanes(panes, paneId, activityMs: activity);
       final target = scan.target;
-      var config = const AgentConfig();
-      if (target != null) {
-        config = await target.adapter.readConfig(
-          AgentContext(
-            ssh: transport,
-            paneIO: paneIO,
-            paneId: target.pane.id,
-            paneWorkingDirectory: target.pane.path,
-          ),
-        );
-      }
 
       state = state.copyWith(
         agent: target?.adapter,
@@ -343,7 +340,6 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
         // Cleared per open: the next read fills it with THIS pane's
         // recent output (the previous agent's preview must not leak).
         paneContent: null,
-        config: config,
         isBusy: false,
         error: target == null && paneId != null
             ? 'No AI agent detected in pane $paneId'
@@ -771,15 +767,10 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
     );
     try {
       final message = await action(adapter, context);
-      // Re-read the effective config best effort; a failed re-read must
-      // not mask the successful apply.
-      var config = state.config;
-      try {
-        config = await adapter.readConfig(context);
-      } on Object {
-        // Keep the previous snapshot.
-      }
-      state = state.copyWith(isBusy: false, notice: message, config: config);
+      // No config re-read after the action: the console no longer
+      // manages the agent's config, and the read added an exec to
+      // every send.
+      state = state.copyWith(isBusy: false, notice: message);
     } on Object catch (e) {
       state = state.copyWith(isBusy: false, error: '$e');
     }

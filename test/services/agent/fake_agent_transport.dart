@@ -183,6 +183,7 @@ class FakePaneIO implements PaneIO {
   Future<Map<String, String>> readRecentContents(
     List<String> paneIds, {
     int lines = 3,
+    Duration? timeout,
   }) async {
     calls.add('readRecentContents ${paneIds.length}');
     return {for (final id in paneIds) id: recentContent};

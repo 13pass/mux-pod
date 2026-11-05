@@ -136,6 +136,7 @@ abstract class PaneIO {
   Future<Map<String, String>> readRecentContents(
     List<String> paneIds, {
     int lines = 3,
+    Duration? timeout,
   });
 
   /// Types [text] literally into [paneId] (no key interpretation).
@@ -231,6 +232,7 @@ class TmuxPaneIO implements PaneIO {
   Future<Map<String, String>> readRecentContents(
     List<String> paneIds, {
     int lines = 3,
+    Duration? timeout,
   }) async {
     final tails = <String, String>{};
     for (final paneId in paneIds) {
@@ -774,6 +776,7 @@ class HerdrPaneIO implements PaneIO {
   Future<Map<String, String>> readRecentContents(
     List<String> paneIds, {
     int lines = 3,
+    Duration? timeout,
   }) async {
     final tails = <String, String>{};
     final safe = paneIds.where((id) => _safePaneId(id)).toList();
@@ -786,7 +789,7 @@ class HerdrPaneIO implements PaneIO {
         '$bin pane read "\$p" --source recent-unwrapped '
         '--lines $lines --format text 2>/dev/null; '
         'done; true',
-        timeout: _execTimeout,
+        timeout: timeout ?? _execTimeout,
       );
       final marker = RegExp(r'<<<MUXPOD:([^>]+)>>>');
       final matches = marker.allMatches(out.stdout).toList();
