@@ -711,7 +711,15 @@ class RemoteUiNotifier extends Notifier<RemoteUiState> {
       // The selection may have changed while reading; only update the
       // preview when the read still belongs to the selected pane.
       if (!ref.mounted || state.agentPaneId != paneId) return;
-      state = state.copyWith(paneContent: content.isEmpty ? null : content);
+      if (content.isEmpty) {
+        // herdr intermittently answers `pane read` with empty output
+        // (exit 0). That is NOT "the pane lost its content": wiping
+        // the transcript here blanked the chat until the user left
+        // and re-entered the console. Keep the previous content; the
+        // next poll refreshes it.
+        return;
+      }
+      state = state.copyWith(paneContent: content);
     } on Object {
       // Keep the previous preview.
     }

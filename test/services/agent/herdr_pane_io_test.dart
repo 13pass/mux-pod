@@ -235,6 +235,33 @@ void main() {
       expect(read, contains('--format text'));
     });
 
+    test('readRecentContent retries once on an empty answer', () async {
+      final t = FakeAgentTransport();
+      final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');
+      var reads = 0;
+      t.onExec = (command) {
+        if (command.startsWith('test -x -- ')) return '';
+        if (command.contains('pane read')) {
+          reads++;
+          return reads == 1 ? '' : 'agent output\n'; // transient empty
+        }
+        throw StateError('unexpected: $command');
+      };
+      expect(await io.readRecentContent('w5:p3'), 'agent output');
+      expect(reads, 2);
+      // A second consecutive empty stays empty (no infinite retries).
+      t.onExec = (command) {
+        if (command.startsWith('test -x -- ')) return '';
+        if (command.contains('pane read')) {
+          reads++;
+          return '';
+        }
+        throw StateError('unexpected: $command');
+      };
+      expect(await io.readRecentContent('w5:p3', lines: 5), isEmpty);
+      expect(reads, 4);
+    });
+
     test('readRecentContent is empty on failure', () async {
       final t = FakeAgentTransport();
       final io = HerdrPaneIO(t, herdrBin: '/usr/local/bin/herdr');

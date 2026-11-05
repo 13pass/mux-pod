@@ -809,17 +809,23 @@ class HerdrPaneIO implements PaneIO {
   Future<String> readRecentContent(String paneId, {int lines = 40}) async {
     if (!_safePaneId(paneId)) return '';
     final bin = await _bin();
-    try {
-      final out = await _transport.execWithExitCode(
-        '$bin pane read $paneId '
-        '--source recent-unwrapped --lines $lines --format text',
-        timeout: _execTimeout,
-      );
-      if (out.exitCode != 0) return '';
-      return trimTrailingPadding(out.stdout);
-    } on Object {
-      return '';
+    // One retry on empty: herdr intermittently answers pane read with
+    // empty output and exit 0; most transients clear on a second try.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final out = await _transport.execWithExitCode(
+          '$bin pane read $paneId '
+          '--source recent-unwrapped --lines $lines --format text',
+          timeout: _execTimeout,
+        );
+        if (out.exitCode != 0) return '';
+        final trimmed = trimTrailingPadding(out.stdout);
+        if (trimmed.isNotEmpty || attempt == 1) return trimmed;
+      } on Object {
+        return '';
+      }
     }
+    return '';
   }
 
   @override
